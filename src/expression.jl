@@ -1,27 +1,36 @@
 mutable struct expression{T}
     constant::Float64
-    terms::Dict{T, Float64}
+    terms::IdDict{T, Float64}
     # expression(c, t::Dict{T, Float64}) where {T} = begin
     #     @show new{T}(c, t)
     # end
 end
 
-expression{T}(constant::Real) where {T} = begin
-    d = Dict{T, Float64}()
+Base.show(io::IO, e::expression) = begin
+    print(io, e.constant, (" " * coeff_to_str(coeff) * "⋅$term" for (term, coeff) in e.terms)...)
+end
+
+function coeff_to_str(coeff)
+    coeff >= 0 ? "+ $coeff" : "- $(-coeff)"
+end
+
+expression{T}(constant::Real = 0.0) where {T} = begin
+    d = IdDict{T, Float64}()
     expression(Base.convert(Float64, constant), d)
 end
 
 expression{T}(v::T, coeff::Real = 1.0, constant::Real = 0.0) where {T} = begin
     coeff = Base.convert(Float64, coeff)
     constant = Base.convert(Float64, constant)
-    d = Dict(v => coeff)
+    d = IdDict(v => coeff)
     expression(constant, d)
 end
 
 expression{T}(e::expression{T}) where {T} = copy(e)
 
 Base.copy(e::expression{T}) where {T} = begin
-    expression(e.constant, e.terms)
+    dictcopy = copy(e.terms)
+    expression(e.constant, dictcopy)
 end
 
 mutable struct term{T}
@@ -34,10 +43,13 @@ function add(e::expression{T}, c::Float64) where {T}
  end
 
 function add(e::expression{T}, v::T, coeff::Float64 = 1.0) where {T}
-    if near_zero(e.terms[v] + coeff)
-        delete!(e.terms, v)
-    else
+    if haskey(e.terms, v)
         e.terms[v] += coeff
+        if near_zero(e.terms[v])
+            delete!(e.terms, v)
+        end
+    else
+        e.terms[v] = coeff
     end
 end
 
@@ -82,6 +94,12 @@ function mult!(e::expression{T}, x::Real) where {T}
         e.terms[term] *= x
     end
     e
+end
+
+# think this might be needed for the add function in simplex solver
+Base.:*(e::expression, x::Real) = begin
+    enew = copy(e)
+    mult!(enew, x)
 end
 
 function mult!(e::expression{T}, x::expression{T}) where {T}

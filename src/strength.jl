@@ -8,6 +8,14 @@ function check(v)
     end
 end
 
+Base.show(io::IO, s::strength) = begin
+    if is_required(s)
+        print(io, "required")
+    else
+        print(io, s)
+    end
+end
+
 convert(::Type{Float64}, s::strength) = s.weight
 
 required() = strength(1000 * 1000 * 1000)

@@ -2,6 +2,9 @@ mutable struct variable{T}
     p::T
 end
 
+Base.show(io::IO, var::variable{T}) where {T<:Number} = print(io, "var($(var.p))")
+Base.show(io::IO, var::variable{Nothing}) = print(io, "NIL")
+
 nil_var() = variable(nothing)
 
 variable() = variable(0.0)
@@ -15,7 +18,5 @@ function set_value(v::variable, p)
 end
 
 is_nil(v::variable) = isnothing(v.p)
-
-Base.string(v::variable) = is_nil(v) ? "NIL" : string(v.p)
 
 is(v::variable, v2::variable) = v === v2

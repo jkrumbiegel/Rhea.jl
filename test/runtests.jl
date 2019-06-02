@@ -110,6 +110,18 @@ end
     @test evaluate(x - y) == 2
 end
 
+@testset "printing" begin
+    x = variable(5)
+    y = variable(2)
+    z = variable(3.37)
+    expr = linear_expression(x * 2 - y + 4 * z - 1)
+    println(expr)
+    n = nil_var()
+    println(n)
+    c = expr >= 5
+    println(c)
+end
+
 @testset "linear equation test" begin
     x = variable(2.0)
     y = variable(3.0)
@@ -139,4 +151,45 @@ end
     @test coefficient(c1, x) == 4
     @test coefficient(c1, y) == 0
     @test coefficient(c1, z) == 3
+end
+
+@testset "symbols" begin
+    s1 = symbol(:e)
+    @test s1.id == 0
+    s2 = symbol(:s)
+    @test s2.id == 1
+    @test_throws ErrorException s3 = symbol(:k)
+    s3 = symbol()
+    @test s3.typ == :n
+    @test_throws ErrorException s4 = symbol(:s, 4)
+end
+
+@testset "constraint 1 test" begin
+    x = variable(0)
+    s = simplex_solver()
+    add_constraint(s, x == 10)
+    @test value(x) == 10.0
+    # add_constraint(s, x >= 15)
+end
+
+@testset "delete 1 test" begin
+    x = variable(0)
+    solver = simplex_solver()
+    init = constraint(x == 100, weak())
+    add_constraint(solver, init)
+    @test value(x) == 100
+    c10 = constraint(x <= 10)
+    c20 = constraint(x <= 20)
+    add_constraint(solver, c10)
+    add_constraint(solver, c20)
+    @test value(x) == 10
+    remove_constraint(solver, c10)
+    @test value(x) == 20
+    remove_constraint(solver, c20)
+    @test value(x) == 100
+    add_constraint(solver, c10)
+    @test value(x) == 10
+    remove_constraint(solver, c10)
+    @test value(x) == 100
+    remove_constraint(solver, init)
 end

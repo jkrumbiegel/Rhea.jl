@@ -4,6 +4,10 @@ mutable struct constraint
     str::strength
 end
 
+Base.show(io::IO, c::constraint) = begin
+    println(io, c.expr, " ", string(c.op), " ", 0, " | ", c.str)
+end
+
 constraint(e::linear_expression, op::relation) = begin
     constraint(e, op, required())
 end
@@ -20,6 +24,8 @@ constraint(c::constraint, s::strength) = begin
     c.str = s
     c
 end
+
+constraint(c::constraint) = constraint(c.expr, c.op, c.str) # not sure
 
 set_strength(c::constraint, s::strength) = begin
     c.str = s
@@ -53,23 +59,24 @@ import Base: ==, <=, >=, |
 # this is needed to avoid a stackoverflowerror when
 # dict checks isequal on variable keys
 # because == is overloaded
-import Base: isequal
-isequal(v::variable, v2::variable) = v === v2
+# import Base: isequal
+# isequal(v::variable, v2::variable) = v === v2
+# maybe not because of IdDict
 
 
 <=(first::linear_expression, second::linear_expression) = constraint(first - second, leq)
 <=(le::linear_expression, v::variable) = le <= linear_expression(v)
-<=(constant::Number, v::variable) = linear_expression(v) <= linear_expression(constant)
+<=(constant::Number, v::variable) = linear_expression(constant) <= linear_expression(v)
 <=(constant::Number, le::linear_expression) = linear_expression(constant) <= le
 <=(le::linear_expression, constant::Number) = le <= linear_expression(constant)
-<=(v::variable, constant::Number) = linear_expression(constant) <= linear_expression(v)
+<=(v::variable, constant::Number) = linear_expression(v) <= linear_expression(constant)
 <=(v::variable, v2::variable) = linear_expression(v) <= linear_expression(v2)
 
 
 >=(first::linear_expression, second::linear_expression) = constraint(first - second, geq)
 >=(le::linear_expression, v::variable) = le >= linear_expression(v)
->=(constant::Number, v::variable) = linear_expression(v) >= linear_expression(constant)
->=(v::variable, constant::Number) = linear_expression(constant) >= linear_expression(v)
+>=(constant::Number, v::variable) = linear_expression(constant) >= linear_expression(v)
+>=(v::variable, constant::Number) = linear_expression(v) >= linear_expression(constant)
 >=(v::variable, v2::variable) = linear_expression(v) >= linear_expression(v2)
 >=(constant::Number, le::linear_expression) = linear_expression(constant) >= le
 >=(le::linear_expression, constant::Number) = le >= linear_expression(constant)
