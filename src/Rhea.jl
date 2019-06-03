@@ -17,7 +17,10 @@ include("constraint.jl")
 export symbol, is_nil, is_external, is_slack, is_pivotable, is_restricted,
     is_unrestricted, dummy, slack, errorsym, external
 include("symbol.jl")
-export simplex_solver, row, add_constraint, update_external_variables, remove_constraint
+export simplex_solver, row, add_constraint, add_constraints,
+    update_external_variables, remove_constraint, set_constant,
+    add_edit_var, add_edit_vars, suggest_value, remove_edit_var,
+    has_edit_var, suggest
 include("simplex_solver.jl")
 
 end # module

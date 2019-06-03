@@ -12,7 +12,13 @@ Base.show(io::IO, s::strength) = begin
     if is_required(s)
         print(io, "required")
     else
-        print(io, s)
+        if s.weight < 1000
+            print(io, "weak($(s.weight))")
+        elseif s.weight < 1000000
+            print(io, "medium($(s.weight / 1000))")
+        else
+            print(io, "medium($(s.weight / 1000000))")
+        end
     end
 end
 

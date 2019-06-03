@@ -193,3 +193,285 @@ end
     @test value(x) == 100
     remove_constraint(solver, init)
 end
+
+@testset "delete 2 test" begin
+    x = variable(0)
+    y = variable(0)
+    solver = simplex_solver()
+    add_constraints(solver, [
+        (x == 100) | weak(),
+        (y == 120) | strong()
+    ])
+    @test value(x) == 100
+    @test value(y) == 120
+
+    c10 = x <= 10
+    c20 = x <= 20
+
+    add_constraint(solver, c10)
+    add_constraint(solver, c20)
+    @test value(x) == 10
+    remove_constraint(solver, c10)
+    @test value(x) == 20
+
+    cxy = constraint(x * 2 == y)
+    add_constraint(solver, cxy)
+    @test value(x) == 20
+    @test value(y) == 40
+
+    remove_constraint(solver, c20)
+    @test value(x) == 60
+    @test value(y) == 120
+
+    remove_constraint(solver, cxy)
+    @test value(x) == 100
+    @test value(y) == 120
+end
+
+@testset "delete 3 test" begin
+    x = variable(0)
+    solver = simplex_solver()
+
+    add_constraint(solver, (x == 100) | weak())
+    @test value(x) == 100
+
+    c10 = x <= 10
+    c10b = x <= 10
+
+    add_constraints(solver, [c10, c10b])
+    @test value(x) == 10
+    remove_constraint(solver, c10)
+    @test value(x) == 10
+    remove_constraint(solver, c10b)
+    @test value(x) == 100
+end
+
+@testset "set constant 1 test" begin
+    x = variable(0)
+    solver = simplex_solver()
+    cn = add_constraint(solver, x == 100)
+    @test value(x) == 100
+    set_constant(solver, cn, 110)
+    @test value(x) == 110
+
+    set_constant(solver, cn, 150)
+    @test value(x) == 150
+
+    set_constant(solver, cn, -25)
+    @test value(x) == -25
+end
+
+@testset "set constant 2 test" begin
+    x = variable(0)
+    solver = simplex_solver()
+    cn = add_constraint(solver, (x == 100) | medium())
+    @test value(x) == 100
+    set_constant(solver, cn, 110)
+    @test value(x) == 110
+
+    set_constant(solver, cn, 150)
+    @test value(x) == 150
+
+    set_constant(solver, cn, -25)
+    @test value(x) == -25
+end
+
+@testset "set constant 3 test" begin
+    x = variable(0)
+    solver = simplex_solver()
+    cn = add_constraint(solver, x >= 100)
+    @test value(x) == 100
+    set_constant(solver, cn, 110)
+    @test value(x) == 110
+
+    set_constant(solver, cn, 150)
+    @test value(x) == 150
+
+    set_constant(solver, cn, -25)
+    @test value(x) == -25
+end
+
+@testset "set constant 4 test" begin
+    x = variable(0)
+    solver = simplex_solver()
+    cn = add_constraint(solver, x <= 100)
+    @test value(x) == 100
+    set_constant(solver, cn, 50)
+    @test value(x) == 50
+
+    set_constant(solver, cn, 150)
+    @test value(x) == 150
+
+    set_constant(solver, cn, -25)
+    @test value(x) == -25
+end
+
+@testset "set constant 5 test" begin
+    x = variable(0)
+    solver = simplex_solver()
+    cn = add_constraint(solver, (x >= 100) | medium())
+    @test value(x) == 100
+    set_constant(solver, cn, 110)
+    @test value(x) == 110
+
+    set_constant(solver, cn, 150)
+    @test value(x) == 150
+end
+
+@testset "set constant 6 test" begin
+    x = variable()
+    solver = simplex_solver()
+    cn = add_constraint(solver, (x <= 100) | medium())
+    @test value(x) == 100
+    set_constant(solver, cn, 50)
+    @test value(x) == 50
+
+    set_constant(solver, cn, -10)
+    @test value(x) == -10
+end
+
+@testset "casso 1 test" begin
+    x = variable()
+    y = variable()
+    solver = simplex_solver()
+    add_constraints(solver, [
+        x <= y,
+        y == x + 3,
+        (x == 10) | weak(),
+        (y == 10) | weak()
+    ])
+    @test (value(x) == 10 && value(y) == 13) || (value(x) == 7 && value(y) == 10)
+end
+
+@testset "casso 1 test" begin
+    x = variable()
+    y = variable()
+    solver = simplex_solver()
+    add_constraints(solver, [
+        x <= y,
+        y == x + 3,
+        x == 10
+    ])
+    @test value(x) == 10
+    @test value(y) == 13
+end
+
+@testset "inconsistent 1 test" begin
+    x = variable()
+    solver = simplex_solver()
+    add_constraint(solver, x == 10)
+    @test_throws ErrorException add_constraint(solver, x == 5)
+end
+
+@testset "inconsistent 2 test" begin
+    x = variable()
+    solver = simplex_solver()
+    @test_throws ErrorException add_constraints(solver, [x >= 10, x <= 5])
+end
+
+@testset "inconsistent 3 test" begin
+    x = variable()
+    v = variable()
+    w = variable()
+    y = variable()
+    solver = simplex_solver()
+    add_constraints(solver, [v >= 10, w >= v, x >= w, y >= x])
+    @test_throws ErrorException add_constraint(solver, y <= 5)
+end
+
+@testset "bug 0 test" begin
+    x = variable()
+    y = variable()
+    z = variable()
+    solver = simplex_solver()
+
+    add_edit_vars(solver, [x, y, z])
+    suggest_value(solver, x, 1)
+    suggest_value(solver, z, 2)
+    remove_edit_var(solver, y)
+    suggest_value(solver, x, 3)
+    suggest_value(solver, z, 4)
+
+    @test has_edit_var(solver, x)
+    @test !has_edit_var(solver, y)
+
+    update_external_variables(solver)
+    @test value(x) == 3
+end
+
+@testset "bad strength" begin
+    v = variable(0)
+    solver = simplex_solver()
+    @test_throws ErrorException add_edit_var(solver, v, strong(0))
+    @test_throws ErrorException add_edit_var(solver, v, required())
+end
+
+@testset "bug 16" begin
+    a = variable(1)
+    b = variable(2)
+    solver = simplex_solver()
+
+    add_constraints(solver, [a == b])
+    suggest(solver, a, 3)
+
+    @test value(a) == 3
+    @test value(b) == 3
+end
+
+@testset "bug 16b" begin
+    a = variable()
+    b = variable()
+    c = variable()
+    solver = simplex_solver()
+
+    add_constraints(solver, [a == 10, b == c])
+    suggest(solver, c, 100)
+
+    @test value(a) == 10
+    @test value(b) == 100
+    @test value(c) == 100
+
+    suggest(solver, c, 90)
+    @test value(a) == 10
+    @test value(b) == 90
+    @test value(c) == 90
+end
+
+@testset "nonlinear" begin
+    x = variable()
+    y = variable()
+    solver = simplex_solver()
+
+    @test_throws MethodError add_constraint(solver, x == 5 / y)
+    @test_throws ErrorException add_constraint(solver, x == y * y)
+
+    const2 = linear_expression(2)
+    add_constraint(solver, x == y / const2)
+end
+
+@testset "layout" begin
+    cont_w = variable()
+    cont_h = variable()
+    inner_w = variable()
+    inner_h = variable()
+    inner_t = variable()
+    inner_b = variable()
+    inner_l = variable()
+    inner_r = variable()
+    solver = simplex_solver()
+
+    add_constraints(solver, [
+        cont_w == 1000,
+        cont_h == 800,
+        inner_w == 2 * inner_h,
+        inner_t == inner_b,
+        inner_t >= 60,
+        inner_l >= 30,
+        cont_w == inner_l + inner_r + inner_w,
+        cont_h == inner_t + inner_b + inner_h,
+        inner_l == inner_r
+    ])
+    # suggest(solver, inner_t, 70)
+    @test value(cont_w) == 1000
+    @test value(cont_h) == 800
+end

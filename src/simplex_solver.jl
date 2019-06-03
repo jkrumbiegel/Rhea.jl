@@ -1,6 +1,6 @@
 const row = expression{symbol}
 
-struct constraint_info
+mutable struct constraint_info
     marker::symbol
     other::symbol
     prev_constant::Float64
@@ -12,7 +12,7 @@ struct stay_info
     minus::symbol
 end
 
-struct edit_info
+mutable struct edit_info
     c::constraint
     plus::symbol
     minus::symbol
@@ -89,6 +89,10 @@ has_variable(s::simplex_solver) = !isempty(s.vars)
 has_edit_var(s::simplex_solver) = !isempty(s.edits)
 has_constraint(s::simplex_solver, c::constraint) = haskey(s.constraints, c)
 
+function has_edit_var(s::simplex_solver, v::variable)
+    haskey(s.edits, v)
+end
+
 function pivotable_symbol(r::row)
     for (sym, coeff) in r.terms
         if is_pivotable(sym)
@@ -117,7 +121,8 @@ function make_expression(s::simplex_solver, c::constraint)
         if !is_required(c)
             eminus = errorsym()
             result.var2 = eminus
-            sub!(r, eminus * coeff)
+            # sub!(r, eminus * coeff)
+            sub!(r, row(eminus) * coeff)  # hopefully this is meant
             add(s.objective, eminus, c.str.weight)
         end
     elseif is_required(c)
@@ -173,6 +178,13 @@ function add_constraint(s::simplex_solver, c::constraint)
     add_constraint_(s, c)
     autoupdate(s)
     return c
+end
+
+function add_constraints(s::simplex_solver, constraints::Vector{constraint})
+    for c in constraints
+        add_constraint_(s, c)
+    end
+    autoupdate(s)
 end
 
 function autoupdate(s::simplex_solver)
@@ -393,4 +405,176 @@ function get_marker_leaving_row(s::simplex_solver, marker::symbol)
         return syms[second]
     end
     return third < en ? syms[third] : nothing
+end
+
+function set_constant_(s::simplex_solver, c::constraint, constant::Real)
+    if !haskey(s.constraints, c)
+        error("Constraint not found")
+    end
+    evs = s.constraints[c]
+    delta = -(constant - evs.prev_constant)
+    evs.prev_constant = constant
+
+    if is_slack(evs.marker) || is_required(c)
+        if c.op == geq
+            delta = -delta
+        end
+        for (sym, r) in s.rows
+            add(r, coefficient(r, evs.marker) * delta)
+            if !is_external(sym) && r.constant < 0
+                append!(s.infeasible_rows, sym)
+            end
+        end
+    else
+        if haskey(s.rows, evs.marker)
+            if add(s.rows[evs.marker], -delta) < 0
+                append!(s.infeasible_rows, evs.marker)
+            end
+            return
+        end
+        if haskey(s.rows, evs.other)
+            if add(s.rows[evs.other], delta) < 0
+                append!(s.infeasible_rows, evs.other)
+            end
+            return
+        end
+        for (sym, r) in s.rows
+            add(r, coefficient(r, evs.other) * delta)
+            if !is_external(sym) && expr.constant < 0
+                append!(s.infeasible_rows, sym)
+            end
+        end
+    end
+end
+
+function set_constant(s::simplex_solver, c::constraint, constant::Real)
+    set_constant_(s, c, constant)
+    dual_optimize(s)
+    autoupdate(s)
+end
+
+function dual_optimize(s::simplex_solver)
+    while !isempty(s.infeasible_rows)
+        leaving = pop!(s.infeasible_rows)
+        if !haskey(s.rows, leaving) || s.rows[leaving].constant >= 0
+            continue
+        end
+        r = s.rows[leaving]
+        entering = symbol()
+        min_ratio = prevfloat(Inf)
+        for (sym, coeff) in r.terms
+            if coeff > 0 && !is_dummy(sym)
+                coeff2 = coefficient(s.objective, sym)
+                r = coeff2 / coeff
+                if r < min_ratio
+                    min_ratio = r
+                    entering = sym
+                end
+            end
+        end
+
+        if is_nil(entering)
+            error("Dual optimize failed")
+        end
+
+        tmp = s.rows[leaving]
+        println("tmp: ", tmp)
+        delete!(s.rows, leaving)
+        solve_for(tmp, leaving, entering)
+        println("tmp: ", tmp)
+        substitute_out(s, entering, tmp)
+        s.rows[entering] = tmp
+    end
+end
+
+function add_edit_var(s::simplex_solver, v::variable, str::strength = strong())
+    if has_edit_var(s, v)
+        error("Duplicate edit variable")
+    end
+    if is_required(str)
+        error("Bad required strength")
+    end
+    cn = constraint(linear_expression(v), eq, str)
+    add_constraint(s, cn)
+    ev = s.constraints[cn]
+    s.edits[v] = edit_info(cn, ev.marker, ev.other, 0)
+    return s
+end
+
+function add_edit_vars(s::simplex_solver, vs::Vector{variable{T}}, str::strength = strong()) where {T}
+    for v in vs
+        add_edit_var(s, v, str)
+    end
+end
+
+function suggest_value_(s::simplex_solver, v::variable, value::Real)
+    if !haskey(s.edits, v)
+        error("Unkown edit variable")
+    end
+
+    info = s.edits[v]
+    delta = value - info.prev_constant
+    info.prev_constant = value
+
+    if haskey(s.rows, info.plus)
+        if add(s.rows[info.plus], -delta) < 0
+            append!(s.infeasible_rows, info.plus)
+        end
+        dual_optimize(s)
+        return
+    end
+
+    if haskey(s.rows, info.minus)
+        if add(s.rows[info.minus], delta) < 0
+            append!(s.infeasible_rows, info.minus)
+        end
+        dual_optimize(s)
+        return
+    end
+
+    for (sym, ro) in s.rows
+        add(ro, coefficient(ro, info.plus) * delta)
+        if !is_external(sym) && ro.constant < 0
+            append!(s.infeasible_rows, sym)
+        end
+    end
+end
+
+function suggest_value(s::simplex_solver, v::variable, x::Real)
+    suggest_value_(s, v, x)
+    dual_optimize(s)
+    return s
+end
+
+function remove_edit_var(s::simplex_solver, v::variable)
+    if !haskey(s.edits, v)
+        error("Unknown edit variable")
+    end
+    remove_constraint(s, s.edits[v].c)
+    delete!(s.edits, v)
+end
+
+function remove_edit_vars(s::simplex_solver, vs::Vector{variable{T}}) where {T}
+    for v in vs
+        remove_edit_var(s, v)
+    end
+end
+
+function suggest(s::simplex_solver, v::variable, value::Real)
+    if !has_edit_var(s, v)
+        add_edit_var(s, v)
+    end
+    suggest_value(s, v, value)
+    autoupdate(s)
+end
+
+function suggest(s::simplex_solver, sugs::Vector{suggestion})
+    for sug in sugs
+        if !has_edit_var(s, sug.v)
+            add_edit_var(s, sug.v)
+        end
+        suggest_value_(s, sug.v, sug.suggested_value)
+    end
+    dual_optimize(s)
+    auto_update(s)
 end
