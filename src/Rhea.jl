@@ -20,6 +20,8 @@ include("symbol.jl")
 
 include("simplex_solver.jl")
 
+include("stays.jl")
+
 ## begin exports
 
 # strength
@@ -49,5 +51,8 @@ export simplex_solver, row, add_constraint, add_constraints,
     update_external_variables, remove_constraint, set_constant,
     add_edit_var, add_edit_vars, suggest_value, remove_edit_var,
     has_edit_var, suggest
+
+#stays
+export stays, add, remove, update
 
 end # module

@@ -475,3 +475,38 @@ end
     @test value(cont_w) == 1000
     @test value(cont_h) == 800
 end
+
+@testset "stays 1" begin
+    solver = simplex_solver()
+    st = stays(solver, Float64)
+    a = variable()
+    b = variable()
+
+    add_constraints(solver, [
+        a >= b,
+        a >= 0,
+        a <= 10
+    ])
+    add(st, a)
+
+    suggest(solver, b, 3)
+    update(st)
+    @test value(a) == 3
+    @test value(b) == 3
+    #
+    # suggest(solver, b, 1)
+    # update(st)
+    # @test value(a) == 3
+    # @test value(b) == 1
+    #
+    # suggest(solver, b, 5)
+    # update(st)
+    # @test value(a) == 5
+    # @test value(b) == 5
+    #
+    # suggest(solver, b, 2)
+    # update(st)
+    # @test value(a) == 5
+    # @test value(b) == 2
+end
+
