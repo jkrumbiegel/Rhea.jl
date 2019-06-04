@@ -478,10 +478,8 @@ function dual_optimize(s::simplex_solver)
         end
 
         tmp = s.rows[leaving]
-        println("tmp: ", tmp)
         delete!(s.rows, leaving)
         solve_for(tmp, leaving, entering)
-        println("tmp: ", tmp)
         substitute_out(s, entering, tmp)
         s.rows[entering] = tmp
     end
