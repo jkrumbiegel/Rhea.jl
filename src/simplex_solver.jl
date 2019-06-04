@@ -285,7 +285,7 @@ function substitute_out(s::simplex_solver, sy::symbol, r::row)
     for (sym, ri) in s.rows
         substitute_out(ri, sy, r)
         if is_restricted(sym) && ri.constant < 0
-            append!(s.infeasible_rows, sym)
+            push!(s.infeasible_rows, sym)
         end
     end
     substitute_out(s.objective, sy, r)
@@ -422,26 +422,26 @@ function set_constant_(s::simplex_solver, c::constraint, constant::Real)
         for (sym, r) in s.rows
             add(r, coefficient(r, evs.marker) * delta)
             if !is_external(sym) && r.constant < 0
-                append!(s.infeasible_rows, sym)
+                push!(s.infeasible_rows, sym)
             end
         end
     else
         if haskey(s.rows, evs.marker)
             if add(s.rows[evs.marker], -delta) < 0
-                append!(s.infeasible_rows, evs.marker)
+                push!(s.infeasible_rows, evs.marker)
             end
             return
         end
         if haskey(s.rows, evs.other)
             if add(s.rows[evs.other], delta) < 0
-                append!(s.infeasible_rows, evs.other)
+                push!(s.infeasible_rows, evs.other)
             end
             return
         end
         for (sym, r) in s.rows
             add(r, coefficient(r, evs.other) * delta)
             if !is_external(sym) && expr.constant < 0
-                append!(s.infeasible_rows, sym)
+                push!(s.infeasible_rows, sym)
             end
         end
     end
@@ -516,7 +516,7 @@ function suggest_value_(s::simplex_solver, v::variable, value::Real)
 
     if haskey(s.rows, info.plus)
         if add(s.rows[info.plus], -delta) < 0
-            append!(s.infeasible_rows, info.plus)
+            push!(s.infeasible_rows, info.plus)
         end
         dual_optimize(s)
         return
@@ -524,7 +524,7 @@ function suggest_value_(s::simplex_solver, v::variable, value::Real)
 
     if haskey(s.rows, info.minus)
         if add(s.rows[info.minus], delta) < 0
-            append!(s.infeasible_rows, info.minus)
+            push!(s.infeasible_rows, info.minus)
         end
         dual_optimize(s)
         return
@@ -533,7 +533,7 @@ function suggest_value_(s::simplex_solver, v::variable, value::Real)
     for (sym, ro) in s.rows
         add(ro, coefficient(ro, info.plus) * delta)
         if !is_external(sym) && ro.constant < 0
-            append!(s.infeasible_rows, sym)
+            push!(s.infeasible_rows, sym)
         end
     end
 end
