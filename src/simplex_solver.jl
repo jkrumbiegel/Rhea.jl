@@ -73,8 +73,8 @@ Base.show(io::IO, s::simplex_solver) = begin
     println(io, "\nObjective:\n", s.objective)
 end
 
-simplex_solver() = simplex_solver(
-    true,
+simplex_solver(autoupdate=true) = simplex_solver(
+    autoupdate,
     IdDict(),
     IdDict(),
     IdDict(),
