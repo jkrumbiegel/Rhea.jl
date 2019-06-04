@@ -54,31 +54,48 @@ end
 
 import Base: ==, <=, >=, |
 
+# linear expression & linear expression
 ==(first::linear_expression, second::linear_expression) = constraint(first - second, eq)
+# linear expression & variable
 ==(le::linear_expression, v::variable) = le == linear_expression(v)
 ==(v::variable, le::linear_expression) = le == v
-==(constant::Number, v::variable) = linear_expression(constant) == linear_expression(v)
-==(constant::Number, le::linear_expression) = linear_expression(constant) == le
-==(le::linear_expression, constant::Number) = constant == le
+# variable & constant
 ==(v::variable, constant::Number) = linear_expression(v) == linear_expression(constant)
+==(constant::Number, v::variable) = linear_expression(v) == linear_expression(constant)  # arguments flipped as in src, otherwise x == 100 not the same as 100 == x
+# linear expression & constant
+==(le::linear_expression, constant::Number) = le == linear_expression(constant)
+==(constant::Number, le::linear_expression) = le == linear_expression(constant)  # arguments flipped
+# variable & variable
 ==(v::variable{T}, v2::variable{T}) where {T}  = linear_expression(v) == linear_expression(v2)
 
 
+# linear expression & linear expression
 <=(first::linear_expression, second::linear_expression) = constraint(first - second, leq)
+# linear expression & variable
 <=(le::linear_expression, v::variable) = le <= linear_expression(v)
-<=(constant::Number, v::variable) = linear_expression(constant) <= linear_expression(v)
-<=(constant::Number, le::linear_expression) = linear_expression(constant) <= le
-<=(le::linear_expression, constant::Number) = le <= linear_expression(constant)
+<=(v::variable, le::linear_expression) = linear_expression(v) <= le
+# variable & constant
 <=(v::variable, constant::Number) = linear_expression(v) <= linear_expression(constant)
+<=(constant::Number, v::variable) = linear_expression(constant) <= linear_expression(v)
+# linear expression & constant
+<=(le::linear_expression, constant::Number) = le <= linear_expression(constant)
+<=(constant::Number, le::linear_expression) = linear_expression(constant) <= le
+# variable & variable
 <=(v::variable, v2::variable) = linear_expression(v) <= linear_expression(v2)
 
 
+# linear expression & linear expression
 >=(first::linear_expression, second::linear_expression) = constraint(first - second, geq)
+# linear expression & variable
 >=(le::linear_expression, v::variable) = le >= linear_expression(v)
->=(constant::Number, v::variable) = linear_expression(constant) >= linear_expression(v)
+>=(v::variable, le::linear_expression) = linear_expression(v) >= le
+# variable & constant
 >=(v::variable, constant::Number) = linear_expression(v) >= linear_expression(constant)
->=(v::variable, v2::variable) = linear_expression(v) >= linear_expression(v2)
->=(constant::Number, le::linear_expression) = linear_expression(constant) >= le
+>=(constant::Number, v::variable) = linear_expression(constant) >= linear_expression(v)
+# linear expression & constant
 >=(le::linear_expression, constant::Number) = le >= linear_expression(constant)
+>=(constant::Number, le::linear_expression) = linear_expression(constant) >= le
+# variable & variable
+>=(v::variable, v2::variable) = linear_expression(v) >= linear_expression(v2)
 
 |(c::constraint, s::strength) = constraint(c, s)
