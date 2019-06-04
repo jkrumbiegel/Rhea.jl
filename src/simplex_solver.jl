@@ -202,8 +202,7 @@ function update_external_variables(s::simplex_solver)
 end
 
 function optimize(s::simplex_solver, objective::row)
-    i = 0
-    while i < 5
+    while true
         entry = symbol()
         for (sy, coeff) in objective.terms
             if !is_dummy(sy) && coeff < 0
@@ -242,7 +241,6 @@ function optimize(s::simplex_solver, objective::row)
         solve_for(tmp, exit, entry)
         substitute_out(s, entry, tmp)
         s.rows[entry] = tmp
-        i += 1
     end
 end
 
