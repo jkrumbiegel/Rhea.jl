@@ -128,11 +128,11 @@ end
 
 topspine(a::Axis) = a.t
 topspine(b::Box) = topspine(b.c[1]) # just first element, they will be aligned for hbox
-topspine(g::Grid) = topspine(g.c[1, 1])
+topspine(g::Grid) = topspine(g.c[1, end])  # weird bug with grid alignment in boxes using [1, 1]
 
 bottomspine(a::Axis) = a.b
 bottomspine(b::Box) = bottomspine(b.c[end])
-topspine(g::Grid) = bottomspine(g.c[end, end])
+bottomspine(g::Grid) = bottomspine(g.c[end, end])
 
 leftspine(a::Axis) = a.l
 leftspine(b::Box) = leftspine(b.c[1])
@@ -427,7 +427,6 @@ function largest_hgap(g::Grid)
             val = newval
         end
     end
-    println("hval", val)
     (cand, val)
 end
 
@@ -443,7 +442,6 @@ function largest_vgap(g::Grid)
             val = newval
         end
     end
-    println("vval", val)
     (cand, val)
 end
 
@@ -460,7 +458,6 @@ function add_constraints(s::simplex_solver, g::Grid)
     # closegaps_v = [topedge(g.c[i+1, j]) + 50 == bottomedge(g.c[i, j]) for i in 1:size(g.c, 1)-1, j in 1:size(g.c, 2)]
     # equal_gaps_h = [leftedge(g.c[i, j+1]) - rightedge(g.c[i, j]) == leftedge(g.c[i, j+2]) - rightedge(g.c[i, j+1]) for i in 1:size(g.c, 1), j in 1:size(g.c, 2)-2]
     # equal_gaps_v = [bottomedge(g.c[i, j]) - topedge(g.c[i+1, j]) == bottomedge(g.c[i+1, j]) - topedge(g.c[i+2, j]) for i in 1:size(g.c, 1)-2, j in 1:size(g.c, 2)]
-    println(g.relwidths)
     relwidths = [
         axiswidth(g.c[i, j]) * g.relwidths[j+1] == axiswidth(g.c[i, j+1]) * g.relwidths[j]
             for i in 1:size(g.c, 1), j in 1:size(g.c, 2)-1
@@ -524,21 +521,29 @@ end
 # test_constraint_layout()
 
 function test_grid()
-    g = Grid(3, 3, relwidths = [1, 2, 3], relheights = [2, 1, 1])
-    g.c[1, 1] = Vbox(2)
-    g.c[2, 3] = Hbox(2)
+    g = Grid(4, 3)
+    g2 = Grid(3, 2)
+
+    g2.c[1, 1] = Vbox(2)
+    g2.c[2, 2] = Hbox(2)
+
+    g3 = Hbox(Boxcontent[g, g2], [3, 2])
+
     s = simplex_solver()
-    add_constraints(s, g)
+
+    add_constraints(s, g3)
+
+
 
     add_constraints(s, [
-        width(g) == 800,
-        height(g) == 400,
-        leftedge(g) == 0,
-        bottomedge(g) == 0
+        width(g3) == 1000,
+        height(g3) == 800,
+        leftedge(g3) == 0,
+        bottomedge(g3) == 0
     ])
 
     p = plot(legend = false)
-    plot!(g)
+    plot!(g3)
     p
 end
 
