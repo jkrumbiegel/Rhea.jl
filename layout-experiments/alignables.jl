@@ -3,6 +3,9 @@ pkg"activate ."
 using Rhea
 
 const fvariable = variable{Float64}
+
+# an Alignable should have an "edges" Rect and an "aligns" Rect
+# edges are the outer bounding box while aligns are what is used for aligning (usually axis spines)
 abstract type Alignable end
 
 struct Rect{T}
@@ -37,12 +40,12 @@ struct Grid <: Alignable
     relheights::Vector{Float64} # n cols
     rowtops::Vector{fvariable}
     rowbottoms::Vector{fvariable}
-    rowgapseps::Vector{fvariable}
+    rowgapseps::Vector{fvariable} # the division lines inside row gaps
     collefts::Vector{fvariable}
     colrights::Vector{fvariable}
-    colgapseps::Vector{fvariable}
-    unitwidth::fvariable
-    unitheight::fvariable
+    colgapseps::Vector{fvariable} # the division lines inside column gaps
+    unitwidth::fvariable # what is 1 relative width
+    unitheight::fvariable # what is 1 relative height
     colgap::fvariable
     rowgap::fvariable
 end
@@ -54,8 +57,8 @@ function Grid(nrows, ncols; relwidths = nothing, relheights = nothing)
         VarRect(),
         nrows,
         ncols,
-        isnothing(relwidths) ? ones(ncols) : relwidths,
-        isnothing(relheights) ? ones(nrows) : relheights,
+        isnothing(relwidths) ? ones(ncols) : convert(Vector{Float64}, relwidths),
+        isnothing(relheights) ? ones(nrows) : convert(Vector{Float64}, relheights),
         [fvariable(0) for i in 1:nrows],
         [fvariable(0) for i in 1:nrows],
         [fvariable(0) for i in 1:nrows-1],
@@ -72,44 +75,51 @@ end
 function constraints(g::Grid) ::Vector{constraint}
 
     contentconstraints = constraint[]
+
+    # all the constraints of alignables the grid contains
     for (al, sp) in g.content
+
         append!(contentconstraints, [
+            # snap to the correct row and column boundaries
             al.aligns.top == g.rowtops[sp.rows.start],
             al.aligns.bottom == g.rowbottoms[sp.rows.stop],
             al.aligns.left == g.collefts[sp.cols.start],
             al.aligns.right == g.colrights[sp.cols.stop],
 
+            # ensure that grid edges at least incorporate the alignable's edges
             g.edges.right >= al.edges.right,
             g.edges.left <= al.edges.left,
             g.edges.top >= al.edges.top,
             g.edges.bottom <= al.edges.bottom
         ])
 
-        if sp.cols.start > 1
+        if sp.cols.start > 1 # only when there's a gap left of it
             push!(contentconstraints, g.colgapseps[sp.cols.start - 1] <= al.edges.left)
         end
-        if sp.cols.stop < g.ncols
+        if sp.cols.stop < g.ncols  # only when there's a gap right of it
             push!(contentconstraints, g.colgapseps[sp.cols.stop] >= al.edges.right)
         end
-        if sp.rows.start > 1
+        if sp.rows.start > 1 # only when there's a gap above it
             push!(contentconstraints, g.rowgapseps[sp.rows.start - 1] >= al.edges.top)
         end
-        if sp.rows.stop < g.nrows
+        if sp.rows.stop < g.nrows # only when there's a gap below it
             push!(contentconstraints, g.rowgapseps[sp.rows.stop] <= al.edges.bottom)
         end
 
-
+        # add constraints that the alignable itself brings with it
         append!(contentconstraints, constraints(al))
     end
 
     relwidths = [g.rowtops[i] - g.rowbottoms[i] == g.relheights[i] * g.unitheight for i in 1:g.nrows]
     relheights = [g.colrights[i] - g.collefts[i] == g.relwidths[i] * g.unitwidth for i in 1:g.ncols]
+
     boundsalign = [
         g.rowtops[1] == g.aligns.top,
         g.rowbottoms[end] == g.aligns.bottom,
         g.collefts[1] == g.aligns.left,
         g.colrights[end] == g.aligns.right
     ]
+
     aligns_to_edges = [
         g.edges.top - g.aligns.top >= 0,
         g.edges.bottom - g.aligns.bottom <= 0,
@@ -120,12 +130,17 @@ function constraints(g::Grid) ::Vector{constraint}
         (g.edges.left - g.aligns.left == 0) | strong(),
         (g.edges.right - g.aligns.right == 0) | strong(),
     ]
+
     equalcolgaps = g.ncols <= 1 ? [] : [g.collefts[i+1] - g.colrights[i] == g.colgap for i in 1:g.ncols-1]
     equalrowgaps = g.nrows <= 1 ? [] : [g.rowbottoms[i] - g.rowtops[i+1] == g.rowgap for i in 1:g.nrows-1]
+
+    # the separators have to be between their associated rows / columns
+    # but only if there are more than 1 row / column respectively
     colleftseporder = g.ncols <= 1 ? [] : [g.collefts[i+1] >= g.colgapseps[i] for i in 1:g.ncols-1]
     colrightseporder = g.ncols <= 1 ? [] : [g.colrights[i] <= g.colgapseps[i] for i in 1:g.ncols-1]
     rowtopseporder = g.nrows <= 1 ? [] : [g.rowtops[i+1] <= g.rowgapseps[i] for i in 1:g.nrows-1]
     rowbottomseporder = g.nrows <= 1 ? [] : [g.rowbottoms[i] >= g.rowgapseps[i] for i in 1:g.nrows-1]
+
     vcat(
         contentconstraints,
         relwidths,
@@ -161,38 +176,9 @@ constraints(a::Axis) = begin
     ]
 end
 
-Axis() = Axis(VarRect(), VarRect(), Rect((10 .+ rand(4) * 20)...))
+Axis() = Axis(VarRect(), VarRect(), Rect((20 .+ rand(4) * 20)...))
 
 Rhea.add_constraints(s::simplex_solver, a::Alignable) = add_constraints(s, constraints(a))
-
-function test()
-    g = Grid(6, 5)
-    a = Axis()
-    push!(g.content, Pair(a, Span(2:3, 2:4)))
-    a2 = Axis()
-    push!(g.content, Pair(a2, Span(4:5, 2:3)))
-    a3 = Axis()
-    push!(g.content, Pair(a3, Span(1:1, 1:1)))
-    s = simplex_solver()
-    add_constraints(s, g)
-
-    add_constraints(s,[
-        width(g) == 800,
-        height(g) == 800,
-        # g.edges.bottom == 0,
-        # g.edges.left == 0
-    ])
-    p = plot(legend = false)
-    plot!(g)
-    plot!(a)
-    plot!(a2)
-    plot!(a3)
-    p
-end
-
-test()
-
-
 
 using Plots
 
@@ -222,3 +208,44 @@ Plots.plot!(a::Axis) = begin
     plot!(a.edges)
     plot!(a.aligns)
 end
+
+
+function test()
+    g = Grid(6, 5, relwidths = [1, 2, 1, 2, 1], relheights = [3, 1, 1, 1, 1, 1])
+    a = Axis()
+    push!(g.content, Pair(a, Span(2:3, 2:4)))
+    a2 = Axis()
+    push!(g.content, Pair(a2, Span(4:5, 2:3)))
+    a3 = Axis()
+    push!(g.content, Pair(a3, Span(1:1, 1:1)))
+    a4 = Axis()
+    push!(g.content, Pair(a4, Span(6:6, 1:5)))
+    g2 = Grid(2, 2)
+    push!(g.content, Pair(g2, Span(4:5, 4:5)))
+    # a5 = Axis()
+    # push!(g2.content, Pair(a5, Span(1:2, 1:1)))
+    # a6 = Axis()
+    # push!(g2.content, Pair(a6, Span(1:2, 2:2)))
+
+    s = simplex_solver()
+    add_constraints(s, g)
+
+    add_constraints(s,[
+        width(g) == 1200,
+        height(g) == 1200,
+        g.edges.bottom == 0,
+        g.edges.left == 0
+    ])
+    p = plot(legend = false)
+    plot!(g)
+    plot!(a)
+    plot!(a2)
+    plot!(a3)
+    plot!(a4)
+    plot!(g2)
+    # plot!(a5)
+    # plot!(a6)
+    p
+end
+
+test()
