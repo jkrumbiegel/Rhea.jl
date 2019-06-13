@@ -1,6 +1,7 @@
 using Pkg
 pkg"activate ."
 using Rhea
+using Printf
 
 const fvariable = variable{Float64}
 
@@ -141,20 +142,37 @@ function constraints(g::Grid) ::Vector{constraint}
     rowtopseporder = g.nrows <= 1 ? [] : [g.rowtops[i+1] <= g.rowgapseps[i] for i in 1:g.nrows-1]
     rowbottomseporder = g.nrows <= 1 ? [] : [g.rowbottoms[i] >= g.rowgapseps[i] for i in 1:g.nrows-1]
 
+    # order of columns and rows, otherwise this happens:
+    # Columns:
+    # 24.85 - -202.31
+    #   | 444.01
+    # 479.17 - 24.85
+    #   | 706.33
+    # 706.33 - 479.17
+    colorder = [g.collefts[i] <= g.colrights[i] for i in 1:g.ncols]
+    roworder = [g.rowtops[i] >= g.rowbottoms[i] for i in 1:g.nrows]
+
     vcat(
-        contentconstraints,
-        relwidths,
-        relheights,
+        #try these out against collapsing rows and columns
+        (g.rowgap == 0) | strong(),
+        (g.colgap == 0) | strong(),
+        g.unitheight >= g.rowgap,
+        g.unitwidth >= g.colgap,
+
         boundsalign,
         aligns_to_edges,
+        relwidths,
+        relheights,
         equalcolgaps,
         equalrowgaps,
         colleftseporder,
         colrightseporder,
         rowtopseporder,
         rowbottomseporder,
-        g.rowgap >= 0,
-        g.colgap >= 0
+        colorder,
+        roworder,
+
+        contentconstraints
     )
 end
 
@@ -172,7 +190,12 @@ constraints(a::Axis) = begin
         a.edges.top == a.aligns.top + a.labelsizes.top,
         a.edges.bottom == a.aligns.bottom - a.labelsizes.bottom,
         a.edges.left == a.aligns.left - a.labelsizes.left,
-        a.edges.right == a.aligns.right + a.labelsizes.right
+        a.edges.right == a.aligns.right + a.labelsizes.right,
+        # try adding these
+        a.edges.top >= a.edges.bottom,
+        a.edges.right >= a.edges.left,
+        a.aligns.top >= a.aligns.bottom,
+        a.aligns.right >= a.aligns.left
     ]
 end
 
@@ -184,15 +207,15 @@ using Plots
 
 Plots.plot!(r::FloatRect; kwargs...) = begin
     shape = Plots.Shape([r.left, r.left, r.right, r.right], [r.bottom, r.top, r.top, r.bottom])
-    plot!(shape, alpha=0.7, kwargs...)
+    plot!(shape; kwargs...)
 end
 Plots.plot!(r::VarRect; kwargs...) = begin
     frect = convert(FloatRect, r)
-    plot!(frect, kwargs...)
+    plotrect!(frect; kwargs...)
 end
 Plots.plot!(g::Grid) = begin
-    plot!(g.aligns)
-    plot!(g.edges)
+    plotrect!(g.edges, linecolor=:red, color=GrayA(0, 0.3))
+    # plotrect!(g.aligns, linecolor=:green, color=GrayA(0, 0.3)
     at = value(g.aligns.top)
     ar = value(g.aligns.right)
     al = value(g.aligns.left)
@@ -205,37 +228,107 @@ Plots.plot!(g::Grid) = begin
     end
 end
 Plots.plot!(a::Axis) = begin
-    plot!(a.edges)
-    plot!(a.aligns)
+    plotrect!(a.edges, color=:green, alpha=0.5)
+    plotrect!(a.aligns, color=:blue, alpha=0.7)
+end
+
+Base.setindex!(g::Grid, a::Alignable, rows::S, cols::T) where {T<:Union{UnitRange,Int,Colon}, S<:Union{UnitRange,Int,Colon}} = begin
+
+    if typeof(rows) <: Int
+        rows = rows:rows
+    elseif typeof(rows) <: Colon
+        rows = 1:g.nrows
+    end
+    if typeof(cols) <: Int
+        cols = cols:cols
+    elseif typeof(cols) <: Colon
+        cols = 1:g.ncols
+    end
+
+    if !((1 <= rows.start <= g.nrows) || (1 <= rows.stop <= g.nrows))
+        error("invalid row span $rows for grid with $(g.nrows) rows")
+    end
+    if !((1 <= cols.start <= g.ncols) || (1 <= cols.stop <= g.ncols))
+        error("invalid col span $cols for grid with $(g.ncols) columns")
+    end
+    push!(g.content, Pair(a, Span(rows, cols)))
+end
+
+
+function Base.show(io::IO, r::VarRect)
+    print(io,
+        "l: ", @sprintf("%.2f", value(r.left)),
+        " r: ", @sprintf("%.2f", value(r.right)),
+        " t: ", @sprintf("%.2f", value(r.top)),
+        " b: ", @sprintf("%.2f", value(r.bottom)))
+end
+function Base.show(io::IO, r::FloatRect)
+    print(io,
+        "l: ", @sprintf("%.2f", r.left),
+        " r: ", @sprintf("%.2f", r.right),
+        " t: ", @sprintf("%.2f", r.top),
+        " b: ", @sprintf("%.2f", r.bottom))
+end
+function Base.show(io::IO, g::Grid)
+    println("Grid $(g.nrows)×$(g.ncols)")
+    print(io, "Edges: ")
+    println(io, g.edges)
+    print(io, "Aligns: ")
+    println(io, g.aligns)
+    println("Rows:")
+    for i in 1:g.nrows
+        if i > 1
+            @printf("  gap %.2f | sep %.2f\n", value(g.rowbottoms[i-1]) - value(g.rowtops[i]), value(g.rowgapseps[i-1]))
+        end
+        @printf("%.2f - %.2f | %.2f\n", value(g.rowtops[i]), value(g.rowbottoms[i]), value(g.rowtops[i]) - value(g.rowbottoms[i]))
+    end
+    println("Columns:")
+    for i in 1:g.ncols
+        if i > 1
+            @printf("  gap %.2f | sep %.2f\n", value(g.collefts[i]) - value(g.colrights[i-1]),  value(g.colgapseps[i-1]))
+        end
+        @printf("%.2f - %.2f | %.2f\n", value(g.collefts[i]), value(g.colrights[i]), value(g.colrights[i]) - value(g.collefts[i]))
+    end
+end
+
+function Base.show(io::IO, a::Axis)
+    println("Axis")
+    print(io, "Edges: ")
+    println(io, a.edges)
+    print(io, "Aligns: ")
+    println(io, a.aligns)
 end
 
 
 function test()
-    g = Grid(6, 5, relwidths = [1, 2, 1, 2, 1], relheights = [3, 1, 1, 1, 1, 1])
+    g = Grid(6, 5)
     a = Axis()
-    push!(g.content, Pair(a, Span(2:3, 2:4)))
+    g[2:3, 2:4] = a
     a2 = Axis()
-    push!(g.content, Pair(a2, Span(4:5, 2:3)))
+    g[4:5, 2:3] = a2
     a3 = Axis()
-    push!(g.content, Pair(a3, Span(1:1, 1:1)))
+    g[1, 1] = a3
     a4 = Axis()
-    push!(g.content, Pair(a4, Span(6:6, 1:5)))
+    g[6, :] = a4
     g2 = Grid(2, 2)
-    push!(g.content, Pair(g2, Span(4:5, 4:5)))
-    # a5 = Axis()
-    # push!(g2.content, Pair(a5, Span(1:2, 1:1)))
-    # a6 = Axis()
-    # push!(g2.content, Pair(a6, Span(1:2, 2:2)))
+    g[4:5, 4:5] = g2
+    a5 = Axis()
+    g2[1:2, 1:1] = a5
+    a6 = Axis()
+    g2[1:2, 2:2] = a6
 
     s = simplex_solver()
-    add_constraints(s, g)
 
     add_constraints(s,[
-        width(g) == 1200,
-        height(g) == 1200,
-        g.edges.bottom == 0,
-        g.edges.left == 0
+        (width(g) == 1200) | strong(),
+        (height(g) == 1200) | strong(),
+        (g.edges.bottom == 0) | strong(),
+        (g.edges.left == 0) | strong()
     ])
+
+    add_constraints(s, g)
+
+
     p = plot(legend = false)
     plot!(g)
     plot!(a)
@@ -243,9 +336,107 @@ function test()
     plot!(a3)
     plot!(a4)
     plot!(g2)
-    # plot!(a5)
-    # plot!(a6)
+    plot!(a5)
+    plot!(a6)
+    println(g)
+    println("a: ", a)
+    println("a2: ", a2)
+    # println("a3: ", a3)
+    # println("a4: ", a4)
+    # println("g2: ", g2)
     p
 end
 
 test()
+
+function test2()
+    g = Grid(5, 5)
+    axes = [Axis() for i in 1:g.nrows, j in 1:g.ncols]
+    for i in 1:g.nrows, j in 1:g.ncols
+        g[i, j] = axes[i, j]
+    end
+
+    s = simplex_solver()
+
+    add_constraints(s,[
+        (width(g) == 1200) | strong(),
+        (height(g) == 1200) | strong(),
+        (g.edges.bottom == 0) | strong(),
+        (g.edges.left == 0) | strong()
+    ])
+
+    add_constraints(s, g)
+
+    p = plot(legend = false)
+    plot!(g)
+    for i in 1:g.nrows, j in 1:g.ncols
+        plot!(axes[i, j])
+    end
+    p
+end
+
+test2()
+
+function test3()
+    g = Grid(6, 6, relwidths = collect(range(2, 1, length=6)), relheights = collect(range(2, 1, length=6)))
+    a = Axis()
+    b = Axis()
+    c = Axis()
+    g[1, 1] = a
+    g[2:3, 2:3] = b
+    g[4:6, 4:6] = c
+
+    s = simplex_solver()
+
+    add_constraints(s,[
+        (width(g) == 1200) | strong(),
+        (height(g) == 1200) | strong(),
+        (g.edges.bottom == 0) | strong(),
+        (g.edges.left == 0) | strong()
+    ])
+
+    add_constraints(s, g)
+
+    p = plot(legend = false)
+    plot!(g)
+    plot!(a)
+    plot!(b)
+    plot!(c)
+    # println(g)
+    # println("a: ", a)
+    # println("b: ", b)
+    # println("c: ", c)
+    p
+end
+
+test3()
+
+
+function test4()
+    g = Grid(4, 4)
+    g2 = Grid(4, 4)
+    g3 = Grid(4, 4)
+    a = Axis()
+    g[1:3, 1:3] = g2
+    g2[1:3, 1:3] = g3
+    g3[1:3, 1:3] = a
+    s = simplex_solver()
+
+    add_constraints(s,[
+        (width(g) == 1000) | strong(),
+        (height(g) == 1000) | strong(),
+        (g.edges.bottom == 0) | strong(),
+        (g.edges.left == 0) | strong()
+    ])
+
+    add_constraints(s, g)
+
+    p = plot(legend = false)
+    plot!(g)
+    plot!(g2)
+    plot!(g3)
+    plot!(a)
+    p
+end
+
+test4()
