@@ -214,22 +214,22 @@ Plots.plot!(r::VarRect; kwargs...) = begin
     plotrect!(frect; kwargs...)
 end
 Plots.plot!(g::Grid) = begin
-    plotrect!(g.edges, linecolor=:red, color=GrayA(0, 0.3))
+    plotrect!(g.edges, linecolor=RGB(1, 0, 0), color=GrayA(0, 0))
     # plotrect!(g.aligns, linecolor=:green, color=GrayA(0, 0.3)
     at = value(g.aligns.top)
     ar = value(g.aligns.right)
     al = value(g.aligns.left)
     ab = value(g.aligns.bottom)
     for c in vcat(g.collefts, g.colrights)
-        plot!([value(c), value(c)], [at, ab], color=:black)
+        plot!([value(c), value(c)], [at, ab], color=RGB(0, 1, 0))
     end
     for r in vcat(g.rowtops, g.rowbottoms)
-        plot!([al, ar], [value(r), value(r)], color=:black)
+        plot!([al, ar], [value(r), value(r)], color=RGB(0, 1, 0))
     end
 end
 Plots.plot!(a::Axis) = begin
-    plotrect!(a.edges, color=:green, alpha=0.5)
-    plotrect!(a.aligns, color=:blue, alpha=0.7)
+    plotrect!(a.edges, color=Gray(0.7), alpha=0.5)
+    plotrect!(a.aligns, color=Gray(0.25), alpha=0.5)
 end
 
 Base.setindex!(g::Grid, a::Alignable, rows::S, cols::T) where {T<:Union{UnitRange,Int,Colon}, S<:Union{UnitRange,Int,Colon}} = begin
@@ -254,6 +254,33 @@ Base.setindex!(g::Grid, a::Alignable, rows::S, cols::T) where {T<:Union{UnitRang
     push!(g.content, Pair(a, Span(rows, cols)))
 end
 
+function Base.setindex!(g::Grid, a::Alignable, index::Int, direction::Symbol=:down)
+    if index < 1 || index > g.ncols * g.nrows
+        error("Invalid index $index for $(g.nrows) × $(g.ncols) grid")
+    end
+
+    if direction == :down
+        (j, i) = divrem(index, g.nrows)
+        j += 1
+        if i == 0
+            j -= 1
+            i = g.nrows
+        end
+        g[i, j] = a
+    elseif direction == :right
+        (i, j) = divrem(index, g.ncols)
+        i += 1
+        if j == 0
+            i -= 1
+            j = g.ncols
+        end
+        g[i, j] = a
+    else
+        error("Invalid direction symbol $direction. Only :down or :right")
+    end
+end
+
+# function Base.setindex!(g::Grid, as::Alignables)
 
 function Base.show(io::IO, r::VarRect)
     print(io,
@@ -359,8 +386,8 @@ function test2()
     s = simplex_solver()
 
     add_constraints(s,[
-        (width(g) == 1200) | strong(),
-        (height(g) == 1200) | strong(),
+        (width(g) == 1000) | strong(),
+        (height(g) == 1000) | strong(),
         (g.edges.bottom == 0) | strong(),
         (g.edges.left == 0) | strong()
     ])
@@ -440,3 +467,80 @@ function test4()
 end
 
 test4()
+
+function test5()
+    g = Grid(2, 1)
+    g2 = Grid(1, 3, relwidths = [5, 5, 1])
+    g[2, 1] = g2
+    a = Axis()
+    g[1, 1] = a
+    b = Axis()
+    c = Axis()
+    l = Axis()
+    g2[1, 1] = b
+    g2[1, 2] = c
+    g2[1, 3] = l
+
+    s = simplex_solver()
+    add_constraints(s,[
+        (width(g) == 1000) | strong(),
+        (height(g) == 1000) | strong(),
+        (g.edges.bottom == 0) | strong(),
+        (g.edges.left == 0) | strong()
+    ])
+
+    add_constraints(s, g)
+
+    p = plot(legend = false)
+    plot!(a)
+    plot!(b)
+    plot!(c)
+    plot!(l)
+    p
+end
+
+test5()
+
+function test6()
+    g = Grid(2, 1, relheights = [3, 2])
+    gtop = Grid(2, 3, relwidths = [5, 5, 1])
+    gbottom = Grid(1, 3, relwidths = [1, 5, 5])
+    g[1, 1] = gtop
+    g[2, 1] = gbottom
+
+    topaxes = [Axis() for i in 1:4]
+    toplegend = Axis()
+    bottomaxes = [Axis() for i in 1:2]
+    bottomlegend = Axis()
+
+    for (i, a) in enumerate(topaxes)
+        gtop[i, :down] = a
+    end
+    for (i, a) in enumerate(bottomaxes)
+        gbottom[i+1] = a
+    end
+    gtop[:, 3] = toplegend
+    gbottom[1] = bottomlegend
+
+    s = simplex_solver()
+    add_constraints(s,[
+        (width(g) == 1000) | strong(),
+        (height(g) == 1000) | strong(),
+        (g.edges.bottom == 0) | strong(),
+        (g.edges.left == 0) | strong()
+    ])
+
+    add_constraints(s, g)
+
+    p = plot(legend = false)
+    plot!.(topaxes)
+    plot!.(bottomaxes)
+    plot!(toplegend)
+    plot!(bottomlegend)
+    plot!(g)
+    plot!(gtop)
+    plot!(gbottom)
+    p
+end
+
+test6()
