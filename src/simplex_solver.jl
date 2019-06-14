@@ -185,6 +185,7 @@ function add_constraints(s::simplex_solver, constraints::Vector{constraint})
         add_constraint_(s, c)
     end
     autoupdate(s)
+    return constraints
 end
 
 function autoupdate(s::simplex_solver)
