@@ -3,8 +3,6 @@ pkg"activate ."
 using Rhea
 using Printf
 
-const fvariable = variable{Float64}
-
 # an Alignable should have an "edges" Rect and an "aligns" Rect
 # edges are the outer bounding box while aligns are what is used for aligning (usually axis spines)
 abstract type Alignable end
@@ -31,8 +29,13 @@ struct Span
     cols::UnitRange{Int64}
 end
 
+struct SpannedAlignable
+    al::Alignable
+    sp::Span
+end
+
 struct Grid <: Alignable
-    content::Vector{Pair{Alignable, Span}}
+    content::Vector{SpannedAlignable}
     edges::VarRect
     aligns::VarRect
     nrows::Int64
@@ -49,11 +52,26 @@ struct Grid <: Alignable
     unitheight::fvariable # what is 1 relative height
     colgap::fvariable
     rowgap::fvariable
+    colspacing::fvariable
+    rowspacing::fvariable
+    c_colspacing::constraint
+    c_rowspacing::constraint
+    margins::VarRect
+    c_margins::Rect{constraint}
 end
 
-function Grid(nrows, ncols; relwidths = nothing, relheights = nothing)
+function Grid(nrows, ncols;
+        relwidths = nothing,
+        relheights = nothing,
+        colspacing = 0.0,
+        rowspacing = 0.0,
+        margins = FloatRect(0, 0, 0, 0)
+    )
+    var_colspacing = fvariable(0.0)
+    var_rowspacing = fvariable(0.0)
+    marginvars = VarRect()
     Grid(
-        Pair{Alignable, Span}[],
+        SpannedAlignable[],
         VarRect(),
         VarRect(),
         nrows,
@@ -69,51 +87,77 @@ function Grid(nrows, ncols; relwidths = nothing, relheights = nothing)
         fvariable(0),
         fvariable(0),
         fvariable(0),
-        fvariable(0)
+        fvariable(0),
+        var_colspacing,
+        var_rowspacing,
+        var_colspacing == colspacing,
+        var_rowspacing == rowspacing,
+        marginvars,
+        Rect(
+            marginvars.left == margins.left,
+            marginvars.right == margins.right,
+            marginvars.top == margins.top,
+            marginvars.bottom == margins.bottom
+        )
     )
 end
 
-function constraints(g::Grid) ::Vector{constraint}
+"""
+Calculates the constraints for one SpannedAlignable that is placed within
+    a Grid
+"""
+function constraints_in(g::Grid, spanned::SpannedAlignable)
+    al = spanned.al
+    sp = spanned.sp
+    constraints = [
+        # snap aligns to the correct row and column boundaries
+        al.aligns.top == g.rowtops[sp.rows.start],
+        al.aligns.bottom == g.rowbottoms[sp.rows.stop],
+        al.aligns.left == g.collefts[sp.cols.start],
+        al.aligns.right == g.colrights[sp.cols.stop],
+
+        # ensure that grid edges always include the alignable's edges
+        g.edges.right >= al.edges.right + g.margins.right,
+        g.edges.left + g.margins.left <= al.edges.left,
+        g.edges.top >= al.edges.top + g.margins.top,
+        g.edges.bottom + g.margins.bottom <= al.edges.bottom
+    ]
+
+    # make alignable edges push against the separators inside rows and columns
+    # that allow them to grow
+    # here the column and row spacing is applied as well
+    if sp.cols.start > 1 # only when there's a gap left of the alignable
+        push!(constraints, g.colgapseps[sp.cols.start - 1] <= al.edges.left - 0.5 * g.colspacing)
+    end
+    if sp.cols.stop < g.ncols  # only when there's a gap right of the alignable
+        push!(constraints, g.colgapseps[sp.cols.stop] >= al.edges.right + 0.5 * g.colspacing)
+    end
+    if sp.rows.start > 1 # only when there's a gap above the alignable
+        push!(constraints, g.rowgapseps[sp.rows.start - 1] >= al.edges.top + 0.5 * g.rowspacing)
+    end
+    if sp.rows.stop < g.nrows # only when there's a gap below the alignable
+        push!(constraints, g.rowgapseps[sp.rows.stop] <= al.edges.bottom - 0.5 * g.rowspacing)
+    end
+
+    constraints
+end
+
+function constraints(g::Grid)::Vector{constraint}
 
     contentconstraints = constraint[]
 
     # all the constraints of alignables the grid contains
-    for (al, sp) in g.content
-
-        append!(contentconstraints, [
-            # snap to the correct row and column boundaries
-            al.aligns.top == g.rowtops[sp.rows.start],
-            al.aligns.bottom == g.rowbottoms[sp.rows.stop],
-            al.aligns.left == g.collefts[sp.cols.start],
-            al.aligns.right == g.colrights[sp.cols.stop],
-
-            # ensure that grid edges at least incorporate the alignable's edges
-            g.edges.right >= al.edges.right,
-            g.edges.left <= al.edges.left,
-            g.edges.top >= al.edges.top,
-            g.edges.bottom <= al.edges.bottom
-        ])
-
-        if sp.cols.start > 1 # only when there's a gap left of it
-            push!(contentconstraints, g.colgapseps[sp.cols.start - 1] <= al.edges.left)
-        end
-        if sp.cols.stop < g.ncols  # only when there's a gap right of it
-            push!(contentconstraints, g.colgapseps[sp.cols.stop] >= al.edges.right)
-        end
-        if sp.rows.start > 1 # only when there's a gap above it
-            push!(contentconstraints, g.rowgapseps[sp.rows.start - 1] >= al.edges.top)
-        end
-        if sp.rows.stop < g.nrows # only when there's a gap below it
-            push!(contentconstraints, g.rowgapseps[sp.rows.stop] <= al.edges.bottom)
-        end
-
-        # add constraints that the alignable itself brings with it
-        append!(contentconstraints, constraints(al))
+    for spanned in g.content
+        # constraints of alignable in the grid
+        append!(contentconstraints, constraints_in(g, spanned))
+        # constraints of the alignable itself
+        append!(contentconstraints, constraints(spanned.al))
     end
 
     relwidths = [g.rowtops[i] - g.rowbottoms[i] == g.relheights[i] * g.unitheight for i in 1:g.nrows]
     relheights = [g.colrights[i] - g.collefts[i] == g.relwidths[i] * g.unitwidth for i in 1:g.ncols]
 
+    # align first and last row / column with grid aligns
     boundsalign = [
         g.rowtops[1] == g.aligns.top,
         g.rowbottoms[end] == g.aligns.bottom,
@@ -122,14 +166,16 @@ function constraints(g::Grid) ::Vector{constraint}
     ]
 
     aligns_to_edges = [
-        g.edges.top - g.aligns.top >= 0,
-        g.edges.bottom - g.aligns.bottom <= 0,
-        g.edges.left - g.aligns.left <= 0,
-        g.edges.right - g.aligns.right >= 0,
-        (g.edges.top - g.aligns.top == 0) | strong(),
-        (g.edges.bottom - g.aligns.bottom == 0) | strong(),
-        (g.edges.left - g.aligns.left == 0) | strong(),
-        (g.edges.right - g.aligns.right == 0) | strong(),
+        # edges have to be outside of or coincide with the aligns
+        g.edges.top >= g.aligns.top + g.margins.top,
+        g.edges.bottom + g.margins.bottom <= g.aligns.bottom,
+        g.edges.left + g.margins.left <= g.aligns.left,
+        g.edges.right >= g.aligns.right + g.margins.right,
+        # make the aligns go as far to the edges as possible / span out the grid cells
+        (g.edges.top == g.aligns.top) | strong(),
+        (g.edges.bottom == g.aligns.bottom) | strong(),
+        (g.edges.left == g.aligns.left) | strong(),
+        (g.edges.right == g.aligns.right) | strong(),
     ]
 
     equalcolgaps = g.ncols <= 1 ? [] : [g.collefts[i+1] - g.colrights[i] == g.colgap for i in 1:g.ncols-1]
@@ -156,9 +202,12 @@ function constraints(g::Grid) ::Vector{constraint}
         #try these out against collapsing rows and columns
         (g.rowgap == 0) | strong(),
         (g.colgap == 0) | strong(),
-        g.unitheight >= g.rowgap,
-        g.unitwidth >= g.colgap,
-
+        g.c_colspacing,
+        g.c_rowspacing,
+        g.c_margins.left,
+        g.c_margins.right,
+        g.c_margins.top,
+        g.c_margins.bottom,
         boundsalign,
         aligns_to_edges,
         relwidths,
@@ -211,25 +260,25 @@ Plots.plot!(r::FloatRect; kwargs...) = begin
 end
 Plots.plot!(r::VarRect; kwargs...) = begin
     frect = convert(FloatRect, r)
-    plotrect!(frect; kwargs...)
+    plot!(frect; kwargs...)
 end
 Plots.plot!(g::Grid) = begin
-    plotrect!(g.edges, linecolor=RGB(1, 0, 0), color=GrayA(0, 0))
+    plot!(g.edges, linecolor=RGB(1, 0, 0), color=GrayA(0, 0))
     # plotrect!(g.aligns, linecolor=:green, color=GrayA(0, 0.3)
     at = value(g.aligns.top)
     ar = value(g.aligns.right)
     al = value(g.aligns.left)
     ab = value(g.aligns.bottom)
     for c in vcat(g.collefts, g.colrights)
-        plot!([value(c), value(c)], [at, ab], color=RGB(0, 1, 0))
+        plot!([value(c), value(c)], [at, ab], color=RGB(0, 0, 1))
     end
     for r in vcat(g.rowtops, g.rowbottoms)
-        plot!([al, ar], [value(r), value(r)], color=RGB(0, 1, 0))
+        plot!([al, ar], [value(r), value(r)], color=RGB(0, 0, 1))
     end
 end
 Plots.plot!(a::Axis) = begin
-    plotrect!(a.edges, color=Gray(0.7), alpha=0.5)
-    plotrect!(a.aligns, color=Gray(0.25), alpha=0.5)
+    plot!(a.edges, color=Gray(0.7), alpha=0.5)
+    plot!(a.aligns, color=Gray(0.25), alpha=0.5)
 end
 
 Base.setindex!(g::Grid, a::Alignable, rows::S, cols::T) where {T<:Union{UnitRange,Int,Colon}, S<:Union{UnitRange,Int,Colon}} = begin
@@ -251,7 +300,7 @@ Base.setindex!(g::Grid, a::Alignable, rows::S, cols::T) where {T<:Union{UnitRang
     if !((1 <= cols.start <= g.ncols) || (1 <= cols.stop <= g.ncols))
         error("invalid col span $cols for grid with $(g.ncols) columns")
     end
-    push!(g.content, Pair(a, Span(rows, cols)))
+    push!(g.content, SpannedAlignable(a, Span(rows, cols)))
 end
 
 function Base.setindex!(g::Grid, a::Alignable, index::Int, direction::Symbol=:down)
@@ -355,29 +404,30 @@ function test()
 
     add_constraints(s, g)
 
-
-    p = plot(legend = false)
-    plot!(g)
-    plot!(a)
-    plot!(a2)
-    plot!(a3)
-    plot!(a4)
-    plot!(g2)
-    plot!(a5)
-    plot!(a6)
-    println(g)
-    println("a: ", a)
-    println("a2: ", a2)
-    # println("a3: ", a3)
-    # println("a4: ", a4)
-    # println("g2: ", g2)
-    p
+    anim = @animate  for spacing = 1:200
+        if spacing < 100
+            set_constant(s, g.c_colspacing, spacing)
+        else
+            set_constant(s, g.c_rowspacing, (spacing - 100))
+        end
+        p = plot(legend = false)
+        plot!(g)
+        plot!(a)
+        plot!(a2)
+        plot!(a3)
+        plot!(a4)
+        plot!(g2)
+        plot!(a5)
+        plot!(a6)
+        p
+    end
+    gif(anim, fps=25)
 end
 
 test()
 
 function test2()
-    g = Grid(5, 5)
+    g = Grid(5, 5, rowspacing = 20, colspacing = 20)
     axes = [Axis() for i in 1:g.nrows, j in 1:g.ncols]
     for i in 1:g.nrows, j in 1:g.ncols
         g[i, j] = axes[i, j]
@@ -469,8 +519,8 @@ end
 test4()
 
 function test5()
-    g = Grid(2, 1)
-    g2 = Grid(1, 3, relwidths = [5, 5, 1])
+    g = Grid(2, 1, rowspacing = 30)
+    g2 = Grid(1, 3, relwidths = [5, 5, 1], colspacing = 30)
     g[2, 1] = g2
     a = Axis()
     g[1, 1] = a
@@ -496,6 +546,11 @@ function test5()
     plot!(b)
     plot!(c)
     plot!(l)
+    plot!(g)
+    plot!(g2)
+    println(g)
+    println(g.margins)
+    println(g.c_margins)
     p
 end
 
@@ -503,12 +558,12 @@ test5()
 
 function test6()
     g = Grid(2, 1, relheights = [3, 2])
-    gtop = Grid(2, 3, relwidths = [5, 5, 1])
-    gbottom = Grid(1, 3, relwidths = [1, 5, 5])
-    g[1, 1] = gtop
-    g[2, 1] = gbottom
+    gtop = Grid(3, 4, relwidths = [3/11, 3/11, 3/11, 1/11])
+    gbottom = Grid(1, 3, relwidths = [1/11, 5/11, 5/11])
+    g[1] = gtop
+    g[2] = gbottom
 
-    topaxes = [Axis() for i in 1:4]
+    topaxes = [Axis() for i in 1:9]
     toplegend = Axis()
     bottomaxes = [Axis() for i in 1:2]
     bottomlegend = Axis()
@@ -519,11 +574,12 @@ function test6()
     for (i, a) in enumerate(bottomaxes)
         gbottom[i+1] = a
     end
-    gtop[:, 3] = toplegend
+    gtop[:, 4] = toplegend
     gbottom[1] = bottomlegend
 
     s = simplex_solver()
-    add_constraints(s,[
+
+    (widthc, heightc, _, _) = add_constraints(s,[
         (width(g) == 1000) | strong(),
         (height(g) == 1000) | strong(),
         (g.edges.bottom == 0) | strong(),
@@ -532,15 +588,18 @@ function test6()
 
     add_constraints(s, g)
 
-    p = plot(legend = false)
-    plot!.(topaxes)
-    plot!.(bottomaxes)
-    plot!(toplegend)
-    plot!(bottomlegend)
-    plot!(g)
-    plot!(gtop)
-    plot!(gbottom)
-    p
+    anim = @animate for w in range(1000, 500, length=45)
+        set_constant(s, widthc, w)
+        p = plot(legend = false, xlim=(0, 1000))
+        plot!.(topaxes)
+        plot!.(bottomaxes)
+        plot!(toplegend)
+        plot!(bottomlegend)
+        plot!(g)
+        plot!(gtop)
+        plot!(gbottom)
+    end
+    gif(anim, fps=15)
 end
 
 test6()
