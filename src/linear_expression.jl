@@ -28,6 +28,12 @@ end
     enew
 end
 
++(v::variable{T}, e::linear_expression) where {T} = begin
+    enew = linear_expression(v)
+    add!(enew, e)
+    enew
+end
+
 -(e::linear_expression, x::Number) = begin
     enew = copy(e)
     sub!(enew, x)
@@ -43,6 +49,12 @@ end
 -(e::linear_expression, v::variable{T}) where {T} = begin
     enew = copy(e)
     sub!(enew, v)
+    enew
+end
+
+-(v::variable{T}, e::linear_expression) where {T} = begin
+    enew = linear_expression(v)
+    sub!(enew, e)
     enew
 end
 
