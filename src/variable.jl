@@ -7,6 +7,8 @@ Base.show(io::IO, var::variable{Nothing}) = print(io, "NIL")
 
 nil_var() = variable(nothing)
 
+const fvariable = variable{Float64}
+fvariable() = variable(0.0)
 variable() = variable(0.0)
 variable(val::Real) = variable{Float64}(val)
 variable(v::variable) = v

@@ -26,7 +26,7 @@ include("simplex_solver.jl")
 export strength, is_required, required, strong, weak, medium
 
 # variable
-export variable, is_nil, nil_var, value, int_value, set_value, is
+export variable, fvariable, is_nil, nil_var, value, int_value, set_value, is
 
 # approx
 export expression, add!, sub!, div!, mult!, substitute_out, coefficient
