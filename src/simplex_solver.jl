@@ -438,7 +438,7 @@ function set_constant_(s::simplex_solver, c::constraint, constant::Real)
         end
         for (sym, r) in s.rows
             add(r, coefficient(r, evs.other) * delta)
-            if !is_external(sym) && expr.constant < 0
+            if !is_external(sym) && r.constant < 0
                 push!(s.infeasible_rows, sym)
             end
         end
