@@ -1,5 +1,6 @@
 using Rhea
 using Test
+using Observables
 
 @testset "strength test" begin
     @test is_required(required())
@@ -17,13 +18,13 @@ using Test
     @test medium(1) > weak(999)
 end
 
-@testset "variable test" begin
-    a = variable()
+@testset "Variable test" begin
+    a = FVariable()
     m = nil_var()
     n = nil_var()
-    x = variable(3.0)
-    y = variable(x)
-    z = variable(3.0)
+    x = FVariable(3.0)
+    y = Variable(x)
+    z = FVariable(3.0)
 
     @test is_nil(n)
     n = x
@@ -52,13 +53,13 @@ end
 end
 
 @testset "linear expressions 1" begin
-    e1 = linear_expression(5)
+    e1 = LinearExpression(5)
     @test evaluate(e1) == 5
     mult!(e1, -1)
     @test evaluate(e1) == -5
 
-    x = variable(3.0)
-    e2 = linear_expression(x, 2.0, 1.0)
+    x = FVariable(3.0)
+    e2 = LinearExpression(x, 2.0, 1.0)
     @test evaluate(e2) == 7
     @test evaluate(e2 + 2.0) == 9
     @test evaluate(e2 - 1.0) == 6
@@ -68,7 +69,7 @@ end
     sub!(e2, x)
     @test evaluate(e2) == 7
 
-    y = variable(2.0)
+    y = FVariable(2.0)
     add!(e2, y * 5)
     @test evaluate(e2) == 17
 
@@ -88,19 +89,19 @@ end
 end
 
 # @testset "linear expressions 2" begin
-#     x = variable(3)
-#     test1 = linear_expression(x, 5, 2)
-#     test2 = linear_expression(test1)
+#     x = Variable(3)
+#     test1 = LinearExpression(x, 5, 2)
+#     test2 = LinearExpression(test1)
 #
 #     @test evaluate(test1) == 17
 #     @test evaluate(test2) == 17
 # end
 
 @testset "linear expressions 3" begin
-    x = variable(5)
-    y = variable(2)
+    x = FVariable(5)
+    y = FVariable(2)
 
-    expr = linear_expression(x * 2 + y - 1)
+    expr = LinearExpression(x * 2 + y - 1)
     @test evaluate(expr) == 11
 
     set_value(x, 4)
@@ -111,10 +112,10 @@ end
 end
 
 @testset "printing" begin
-    x = variable(5)
-    y = variable(2)
-    z = variable(3.37)
-    expr = linear_expression(x * 2 - y + 4 * z - 1)
+    x = FVariable(5)
+    y = FVariable(2)
+    z = FVariable(3.37)
+    expr = LinearExpression(x * 2 - y + 4 * z - 1)
     println(expr)
     n = nil_var()
     println(n)
@@ -123,8 +124,8 @@ end
 end
 
 @testset "linear equation test" begin
-    x = variable(2.0)
-    y = variable(3.0)
+    x = FVariable(2.0)
+    y = FVariable(3.0)
     @test is_satisfied(x == y - 1)
     @test !is_satisfied(x == y)
     @test is_satisfied(x * 2 == y + 1)
@@ -132,8 +133,8 @@ end
 end
 
 @testset "linear inequality test" begin
-    x = variable(2.0)
-    y = variable(3.0)
+    x = FVariable(2.0)
+    y = FVariable(3.0)
     x <= y
     @test is_satisfied(x + 1 <= y)
     @test is_satisfied(x * 2 + y >= 4)
@@ -142,10 +143,10 @@ end
 end
 
 @testset "substitute out test" begin
-    x = variable()
-    y = variable()
-    z = variable()
-    c1 = linear_expression(x * 4 + y * 2 + z)
+    x = FVariable()
+    y = FVariable()
+    z = FVariable()
+    c1 = LinearExpression(x * 4 + y * 2 + z)
     substitute_out(c1, y, z + 3)
     @test c1.constant == 6
     @test coefficient(c1, x) == 4
@@ -154,32 +155,32 @@ end
 end
 
 @testset "symbols" begin
-    s1 = symbol(:e)
+    s1 = RSymbol(:e)
     @test s1.id == 0
-    s2 = symbol(:s)
+    s2 = RSymbol(:s)
     @test s2.id == 1
-    @test_throws ErrorException s3 = symbol(:k)
-    s3 = symbol()
+    @test_throws ErrorException s3 = RSymbol(:k)
+    s3 = RSymbol()
     @test s3.typ == :n
-    @test_throws ErrorException s4 = symbol(:s, 4)
+    @test_throws ErrorException s4 = RSymbol(:s, 4)
 end
 
 @testset "constraint 1 test" begin
-    x = variable(0)
-    s = simplex_solver()
+    x = FVariable(0)
+    s = SimplexSolver()
     add_constraint(s, x == 10)
     @test value(x) == 10.0
     # add_constraint(s, x >= 15)
 end
 
 @testset "delete 1 test" begin
-    x = variable(0)
-    solver = simplex_solver()
-    init = constraint(x == 100, weak())
+    x = FVariable(0)
+    solver = SimplexSolver()
+    init = Constraint(x == 100, weak())
     add_constraint(solver, init)
     @test value(x) == 100
-    c10 = constraint(x <= 10)
-    c20 = constraint(x <= 20)
+    c10 = Constraint(x <= 10)
+    c20 = Constraint(x <= 20)
     add_constraint(solver, c10)
     add_constraint(solver, c20)
     @test value(x) == 10
@@ -195,9 +196,9 @@ end
 end
 
 @testset "delete 2 test" begin
-    x = variable(0)
-    y = variable(0)
-    solver = simplex_solver()
+    x = FVariable(0)
+    y = FVariable(0)
+    solver = SimplexSolver()
     add_constraints(solver, [
         (x == 100) | weak(),
         (y == 120) | strong()
@@ -214,7 +215,7 @@ end
     remove_constraint(solver, c10)
     @test value(x) == 20
 
-    cxy = constraint(x * 2 == y)
+    cxy = Constraint(x * 2 == y)
     add_constraint(solver, cxy)
     @test value(x) == 20
     @test value(y) == 40
@@ -229,8 +230,8 @@ end
 end
 
 @testset "delete 3 test" begin
-    x = variable(0)
-    solver = simplex_solver()
+    x = FVariable(0)
+    solver = SimplexSolver()
 
     add_constraint(solver, (x == 100) | weak())
     @test value(x) == 100
@@ -247,8 +248,8 @@ end
 end
 
 @testset "set constant 1 test" begin
-    x = variable(0)
-    solver = simplex_solver()
+    x = FVariable(0)
+    solver = SimplexSolver()
     cn = add_constraint(solver, x == 100)
     @test value(x) == 100
     set_constant(solver, cn, 110)
@@ -262,8 +263,8 @@ end
 end
 
 @testset "set constant 2 test" begin
-    x = variable(0)
-    solver = simplex_solver()
+    x = FVariable(0)
+    solver = SimplexSolver()
     cn = add_constraint(solver, (x == 100) | medium())
     @test value(x) == 100
     set_constant(solver, cn, 110)
@@ -277,8 +278,8 @@ end
 end
 
 @testset "set constant 3 test" begin
-    x = variable(0)
-    solver = simplex_solver()
+    x = FVariable(0)
+    solver = SimplexSolver()
     cn = add_constraint(solver, x >= 100)
     @test value(x) == 100
     set_constant(solver, cn, 110)
@@ -292,8 +293,8 @@ end
 end
 
 @testset "set constant 4 test" begin
-    x = variable(0)
-    solver = simplex_solver()
+    x = FVariable(0)
+    solver = SimplexSolver()
     cn = add_constraint(solver, x <= 100)
     @test value(x) == 100
     set_constant(solver, cn, 50)
@@ -307,8 +308,8 @@ end
 end
 
 @testset "set constant 5 test" begin
-    x = variable(0)
-    solver = simplex_solver()
+    x = FVariable(0)
+    solver = SimplexSolver()
     cn = add_constraint(solver, (x >= 100) | medium())
     @test value(x) == 100
     set_constant(solver, cn, 110)
@@ -319,8 +320,8 @@ end
 end
 
 @testset "set constant 6 test" begin
-    x = variable()
-    solver = simplex_solver()
+    x = FVariable()
+    solver = SimplexSolver()
     cn = add_constraint(solver, (x <= 100) | medium())
     @test value(x) == 100
     set_constant(solver, cn, 50)
@@ -331,9 +332,9 @@ end
 end
 
 @testset "casso 1 test" begin
-    x = variable()
-    y = variable()
-    solver = simplex_solver()
+    x = FVariable()
+    y = FVariable()
+    solver = SimplexSolver()
     add_constraints(solver, [
         x <= y,
         y == x + 3,
@@ -344,9 +345,9 @@ end
 end
 
 @testset "casso 1 test" begin
-    x = variable()
-    y = variable()
-    solver = simplex_solver()
+    x = FVariable()
+    y = FVariable()
+    solver = SimplexSolver()
     add_constraints(solver, [
         x <= y,
         y == x + 3,
@@ -357,33 +358,33 @@ end
 end
 
 @testset "inconsistent 1 test" begin
-    x = variable()
-    solver = simplex_solver()
+    x = FVariable()
+    solver = SimplexSolver()
     add_constraint(solver, x == 10)
     @test_throws ErrorException add_constraint(solver, x == 5)
 end
 
 @testset "inconsistent 2 test" begin
-    x = variable()
-    solver = simplex_solver()
+    x = FVariable()
+    solver = SimplexSolver()
     @test_throws ErrorException add_constraints(solver, [x >= 10, x <= 5])
 end
 
 @testset "inconsistent 3 test" begin
-    x = variable()
-    v = variable()
-    w = variable()
-    y = variable()
-    solver = simplex_solver()
+    x = FVariable()
+    v = FVariable()
+    w = FVariable()
+    y = FVariable()
+    solver = SimplexSolver()
     add_constraints(solver, [v >= 10, w >= v, x >= w, y >= x])
     @test_throws ErrorException add_constraint(solver, y <= 5)
 end
 
 @testset "bug 0 test" begin
-    x = variable()
-    y = variable()
-    z = variable()
-    solver = simplex_solver()
+    x = FVariable()
+    y = FVariable()
+    z = FVariable()
+    solver = SimplexSolver()
 
     add_edit_vars(solver, [x, y, z])
     suggest_value(solver, x, 1)
@@ -400,16 +401,16 @@ end
 end
 
 @testset "bad strength" begin
-    v = variable(0)
-    solver = simplex_solver()
+    v = FVariable(0)
+    solver = SimplexSolver()
     @test_throws ErrorException add_edit_var(solver, v, strong(0))
     @test_throws ErrorException add_edit_var(solver, v, required())
 end
 
 @testset "bug 16" begin
-    a = variable(1)
-    b = variable(2)
-    solver = simplex_solver()
+    a = FVariable(1)
+    b = FVariable(2)
+    solver = SimplexSolver()
 
     add_constraints(solver, [a == b])
     suggest(solver, a, 3)
@@ -419,10 +420,10 @@ end
 end
 
 @testset "bug 16b" begin
-    a = variable()
-    b = variable()
-    c = variable()
-    solver = simplex_solver()
+    a = FVariable()
+    b = FVariable()
+    c = FVariable()
+    solver = SimplexSolver()
 
     add_constraints(solver, [a == 10, b == c])
     suggest(solver, c, 100)
@@ -438,27 +439,27 @@ end
 end
 
 @testset "nonlinear" begin
-    x = variable()
-    y = variable()
-    solver = simplex_solver()
+    x = FVariable()
+    y = FVariable()
+    solver = SimplexSolver()
 
     @test_throws MethodError add_constraint(solver, x == 5 / y)
     @test_throws ErrorException add_constraint(solver, x == y * y)
 
-    const2 = linear_expression(2)
+    const2 = LinearExpression(2)
     add_constraint(solver, x == y / const2)
 end
 
 @testset "layout" begin
-    cont_w = variable()
-    cont_h = variable()
-    inner_w = variable()
-    inner_h = variable()
-    inner_t = variable()
-    inner_b = variable()
-    inner_l = variable()
-    inner_r = variable()
-    solver = simplex_solver()
+    cont_w = FVariable()
+    cont_h = FVariable()
+    inner_w = FVariable()
+    inner_h = FVariable()
+    inner_t = FVariable()
+    inner_b = FVariable()
+    inner_l = FVariable()
+    inner_r = FVariable()
+    solver = SimplexSolver()
 
     add_constraints(solver, [
         cont_w == 1000,
@@ -474,4 +475,13 @@ end
     # suggest(solver, inner_t, 70)
     @test value(cont_w) == 1000
     @test value(cont_h) == 800
+end
+
+@testset "observable" begin
+    x = FVariable()
+    on(x.obs) do val
+        @test val == 10
+    end
+    s = SimplexSolver()
+    add_constraint(s, x == 10)
 end

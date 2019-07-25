@@ -1,12 +1,12 @@
-@enum relation begin
+@enum Relation begin
     eq = 0
     leq = 1
     geq = -1
 end
 
-reverse_inequality(r::relation) = relation(-Int(r))
+reverse_inequality(r::Relation) = Relation(-Int(r))
 
-Base.show(io::IO, r::relation) = begin
+Base.show(io::IO, r::Relation) = begin
     if r == eq
         print(io, "==")
     elseif r == leq
@@ -18,7 +18,7 @@ Base.show(io::IO, r::relation) = begin
     end
 end
 
-Base.string(r::relation) = begin
+Base.string(r::Relation) = begin
     if r == eq
         return "=="
     elseif r == leq

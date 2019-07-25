@@ -1,12 +1,12 @@
-mutable struct expression{T}
+mutable struct Expression{T}
     constant::Float64
     terms::IdDict{T, Float64}
-    # expression(c, t::Dict{T, Float64}) where {T} = begin
+    # Expression(c, t::Dict{T, Float64}) where {T} = begin
     #     @show new{T}(c, t)
     # end
 end
 
-Base.show(io::IO, e::expression) = begin
+Base.show(io::IO, e::Expression) = begin
     print(io, e.constant, (" " * coeff_to_str(coeff) * "⋅$term" for (term, coeff) in e.terms)...)
 end
 
@@ -14,23 +14,23 @@ function coeff_to_str(coeff)
     coeff >= 0 ? "+ $coeff" : "- $(-coeff)"
 end
 
-expression{T}(constant::Real = 0.0) where {T} = begin
+Expression{T}(constant::Real = 0.0) where {T} = begin
     d = IdDict{T, Float64}()
-    expression(Base.convert(Float64, constant), d)
+    Expression(Base.convert(Float64, constant), d)
 end
 
-expression{T}(v::T, coeff::Real = 1.0, constant::Real = 0.0) where {T} = begin
+Expression{T}(v::T, coeff::Real = 1.0, constant::Real = 0.0) where {T} = begin
     coeff = Base.convert(Float64, coeff)
     constant = Base.convert(Float64, constant)
     d = IdDict(v => coeff)
-    expression(constant, d)
+    Expression(constant, d)
 end
 
-expression{T}(e::expression{T}) where {T} = copy(e)
+Expression{T}(e::Expression{T}) where {T} = copy(e)
 
-Base.copy(e::expression{T}) where {T} = begin
+Base.copy(e::Expression{T}) where {T} = begin
     dictcopy = copy(e.terms)
-    expression(e.constant, dictcopy)
+    Expression(e.constant, dictcopy)
 end
 
 mutable struct term{T}
@@ -38,11 +38,11 @@ mutable struct term{T}
     coeff::Float64
 end
 
-function add(e::expression{T}, c::Float64) where {T}
+function add(e::Expression{T}, c::Float64) where {T}
      e.constant += c
  end
 
-function add(e::expression{T}, v::T, coeff::Float64 = 1.0) where {T}
+function add(e::Expression{T}, v::T, coeff::Float64 = 1.0) where {T}
     if haskey(e.terms, v)
         e.terms[v] += coeff
         if near_zero(e.terms[v])
@@ -53,11 +53,11 @@ function add(e::expression{T}, v::T, coeff::Float64 = 1.0) where {T}
     end
 end
 
-function erase(e::expression{T}, v::T) where {T}
+function erase(e::Expression{T}, v::T) where {T}
     delete!(e.terms, v)
 end
 
-function substitute_out(e::expression{T}, v::T, esub::expression{T}) where {T}
+function substitute_out(e::Expression{T}, v::T, esub::Expression{T}) where {T}
     if !haskey(e.terms, v)
         return false
     else
@@ -75,7 +75,7 @@ end
 
 
 function change_subject(
-    e::expression{T},
+    e::Expression{T},
     old_subj::T,
     new_subj::T
     ) where {T}
@@ -88,7 +88,7 @@ function change_subject(
     e.terms[old_subj] = tmp
 end
 
-function mult!(e::expression{T}, x::Real) where {T}
+function mult!(e::Expression{T}, x::Real) where {T}
     e.constant *= x
     for term in keys(e.terms)
         e.terms[term] *= x
@@ -97,12 +97,12 @@ function mult!(e::expression{T}, x::Real) where {T}
 end
 
 # think this might be needed for the add function in simplex solver
-Base.:*(e::expression, x::Real) = begin
+Base.:*(e::Expression, x::Real) = begin
     enew = copy(e)
     mult!(enew, x)
 end
 
-function mult!(e::expression{T}, x::expression{T}) where {T}
+function mult!(e::Expression{T}, x::Expression{T}) where {T}
     if is_constant(e)
         c = e.constant
         e.constant = x.constant
@@ -111,29 +111,29 @@ function mult!(e::expression{T}, x::expression{T}) where {T}
     end
 
     if !is_constant(x)
-        error("Nonlinear expression")
+        error("Nonlinear Expression")
     end
     return mult!(e, x.constant)
 end
 
-function div!(e::expression{T}, x::Real) where {T}
+function div!(e::Expression{T}, x::Real) where {T}
     mult!(e, 1 / x)
     return e
 end
 
-function div!(e::expression{T}, x::expression{T}) where {T}
+function div!(e::Expression{T}, x::Expression{T}) where {T}
     if !is_constant(x)
-        error("Nonlinear expression")
+        error("Nonlinear Expression")
     end
     return div!(e, x.constant)
 end
 
-function add!(e::expression{T}, x::Real) where {T}
+function add!(e::Expression{T}, x::Real) where {T}
     e.constant += x
     return e
 end
 
-function add!(e::expression{T}, x::expression{T}) where {T}
+function add!(e::Expression{T}, x::Expression{T}) where {T}
     e.constant += x.constant
     for (t, coeff) in x.terms
         add!(e, term(t, coeff))
@@ -141,11 +141,11 @@ function add!(e::expression{T}, x::expression{T}) where {T}
     return e
 end
 
-function add!(e::expression{T}, x::T) where {T}
+function add!(e::Expression{T}, x::T) where {T}
     return add!(e, term(x, 1.0))
 end
 
-function add!(e::expression{T}, x::term{T}) where {T}
+function add!(e::Expression{T}, x::term{T}) where {T}
     if haskey(e.terms, x.id)
         e.terms[x.id] += x.coeff
         if near_zero(e.terms[x.id])
@@ -157,12 +157,12 @@ function add!(e::expression{T}, x::term{T}) where {T}
     return e
 end
 
-function sub!(e::expression{T}, x::Real) where {T}
+function sub!(e::Expression{T}, x::Real) where {T}
     e.constant -= x
     return e
 end
 
-function sub!(e::expression{T}, x::expression{T}) where {T}
+function sub!(e::Expression{T}, x::Expression{T}) where {T}
     e.constant -= x.constant
     for (t, coeff) in x.terms
         sub!(e, term(t, coeff))
@@ -170,7 +170,7 @@ function sub!(e::expression{T}, x::expression{T}) where {T}
     return e
 end
 
-function sub!(e::expression{T}, x::term{T}) where {T}
+function sub!(e::Expression{T}, x::term{T}) where {T}
     if haskey(e.terms, x.id)
         e.terms[x.id] -= x.coeff
         if near_zero(e.terms[x.id])
@@ -182,12 +182,12 @@ function sub!(e::expression{T}, x::term{T}) where {T}
     return e
 end
 
-function sub!(e::expression{T}, x::T) where {T}
+function sub!(e::Expression{T}, x::T) where {T}
     return sub!(e, term(x, 1.0))
 end
 
 
-function solve_for(e::expression{T}, v::T) where {T}
+function solve_for(e::Expression{T}, v::T) where {T}
     if !haskey(e.terms, v)
         error("Cannot solve for unknown term $v")
     else
@@ -197,12 +197,12 @@ function solve_for(e::expression{T}, v::T) where {T}
     end
 end
 
-function solve_for(e::expression{T}, lhs::T, rhs::T) where {T}
+function solve_for(e::Expression{T}, lhs::T, rhs::T) where {T}
     sub!(e, lhs)
     solve_for(e, rhs)
 end
 
-function coefficient(e::expression{T}, v::T) where {T}
+function coefficient(e::Expression{T}, v::T) where {T}
     if !haskey(e.terms, v)
         return 0.0
     else
@@ -210,14 +210,14 @@ function coefficient(e::expression{T}, v::T) where {T}
     end
 end
 
-function is_constant(e::expression{T}) where {T}
+function is_constant(e::Expression{T}) where {T}
     return isempty(e.terms)
 end
 
-function set_constant(e::expression{T}, x::Float64) where {T}
+function set_constant(e::Expression{T}, x::Float64) where {T}
     e.constant = x
 end
 
-function empty(e::expression{T}) where {T}
+function empty(e::Expression{T}) where {T}
     is_constant(e) && e.constant == 0
 end
