@@ -1,49 +1,49 @@
-const row = expression{symbol}
+const Row = Expression{RSymbol}
 
 mutable struct constraint_info
-    marker::symbol
-    other::symbol
+    marker::RSymbol
+    other::RSymbol
     prev_constant::Float64
 end
 
 struct stay_info
-    c::constraint
-    plus::symbol
-    minus::symbol
+    c::Constraint
+    plus::RSymbol
+    minus::RSymbol
 end
 
 mutable struct edit_info
-    c::constraint
-    plus::symbol
-    minus::symbol
+    c::Constraint
+    plus::RSymbol
+    minus::RSymbol
     prev_constant::Float64
 end
 
 struct suggestion
-    v::variable
+    v::Variable
     suggested_value::Float64
 end
 
  mutable struct expression_result
-    r::row
-    var1::Union{symbol, Missing}
-    var2::Union{symbol, Missing}
-    expression_result() = new(row(), symbol(), symbol())
+    r::Row
+    var1::Union{RSymbol, Missing}
+    var2::Union{RSymbol, Missing}
+    expression_result() = new(Row(), RSymbol(), RSymbol())
 end
 
-mutable struct simplex_solver
+mutable struct SimplexSolver
     auto_update::Bool
-    vars::IdDict{variable, symbol}
-    rows::IdDict{symbol, row}
-    constraints::IdDict{constraint, constraint_info}
-    infeasible_rows::Vector{symbol}
-    edits::IdDict{variable, edit_info}
-    stays::IdDict{variable, stay_info}
-    objective::row
-    artificial::row
+    vars::IdDict{Variable, RSymbol}
+    rows::IdDict{RSymbol, Row}
+    constraints::IdDict{Constraint, constraint_info}
+    infeasible_rows::Vector{RSymbol}
+    edits::IdDict{Variable, edit_info}
+    stays::IdDict{Variable, stay_info}
+    objective::Row
+    artificial::Row
 end
 
-Base.show(io::IO, constraints::IdDict{constraint, constraint_info}) = begin
+Base.show(io::IO, constraints::IdDict{Constraint, constraint_info}) = begin
     println(io, "$(length(constraints)) constraints:")
     i = 1
     for (con, info) in constraints
@@ -53,7 +53,7 @@ Base.show(io::IO, constraints::IdDict{constraint, constraint_info}) = begin
     end
 end
 
-Base.show(io::IO, s::simplex_solver) = begin
+Base.show(io::IO, s::SimplexSolver) = begin
     println(io, "Variables:")
     for (var, sym) in s.vars
         println(io, var, " : ", sym)
@@ -73,7 +73,7 @@ Base.show(io::IO, s::simplex_solver) = begin
     println(io, "\nObjective:\n", s.objective)
 end
 
-simplex_solver(autoupdate=true) = simplex_solver(
+SimplexSolver(autoupdate=true) = SimplexSolver(
     autoupdate,
     IdDict(),
     IdDict(),
@@ -81,28 +81,28 @@ simplex_solver(autoupdate=true) = simplex_solver(
     [],
     IdDict(),
     IdDict(),
-    row(),
-    row()
+    Row(),
+    Row()
 )
 
-has_variable(s::simplex_solver) = !isempty(s.vars)
-has_edit_var(s::simplex_solver) = !isempty(s.edits)
-has_constraint(s::simplex_solver, c::constraint) = haskey(s.constraints, c)
+has_variable(s::SimplexSolver) = !isempty(s.vars)
+has_edit_var(s::SimplexSolver) = !isempty(s.edits)
+has_constraint(s::SimplexSolver, c::Constraint) = haskey(s.constraints, c)
 
-function has_edit_var(s::simplex_solver, v::variable)
+function has_edit_var(s::SimplexSolver, v::Variable)
     haskey(s.edits, v)
 end
 
-function pivotable_symbol(r::row)
+function pivotable_symbol(r::Row)
     for (sym, coeff) in r.terms
         if is_pivotable(sym)
             return sym
         end
     end
-    return symbol()
+    return RSymbol()
 end
 
-function make_expression(s::simplex_solver, c::constraint)
+function make_expression(s::SimplexSolver, c::Constraint)
     result = expression_result()
     r = result.r
     cexpr = c.expr
@@ -117,12 +117,12 @@ function make_expression(s::simplex_solver, c::constraint)
         sl = slack()
         result.var1 = sl
         # add!(r, sl * coeff)
-        add!(r, row(sl) * coeff) # hopefully this is meant
+        add!(r, Row(sl) * coeff) # hopefully this is meant
         if !is_required(c)
             eminus = errorsym()
             result.var2 = eminus
             # sub!(r, eminus * coeff)
-            sub!(r, row(eminus) * coeff)  # hopefully this is meant
+            sub!(r, Row(eminus) * coeff)  # hopefully this is meant
             add(s.objective, eminus, c.str.weight)
         end
     elseif is_required(c)
@@ -146,9 +146,9 @@ function make_expression(s::simplex_solver, c::constraint)
     return result
 end
 
-function add_constraint_(s::simplex_solver, c::constraint)
+function add_constraint_(s::SimplexSolver, c::Constraint)
     if has_constraint(s, c)
-        error("Duplicate constraint")
+        error("Duplicate Constraint")
     end
 
     expr = make_expression(s, c)
@@ -174,13 +174,13 @@ function add_constraint_(s::simplex_solver, c::constraint)
     optimize(s, s.objective)
 end
 
-function add_constraint(s::simplex_solver, c::constraint)
+function add_constraint(s::SimplexSolver, c::Constraint)
     add_constraint_(s, c)
     autoupdate(s)
     return c
 end
 
-function add_constraints(s::simplex_solver, constraints::Vector{constraint})
+function add_constraints(s::SimplexSolver, constraints::Vector{Constraint})
     for c in constraints
         add_constraint_(s, c)
     end
@@ -188,13 +188,13 @@ function add_constraints(s::simplex_solver, constraints::Vector{constraint})
     return constraints
 end
 
-function autoupdate(s::simplex_solver)
+function autoupdate(s::SimplexSolver)
     if s.auto_update
         update_external_variables(s)
     end
 end
 
-function update_external_variables(s::simplex_solver)
+function update_external_variables(s::SimplexSolver)
     for (var, sym) in s.vars
         if haskey(s.rows, sym)
             set_value(var, s.rows[sym].constant)
@@ -202,9 +202,9 @@ function update_external_variables(s::simplex_solver)
     end
 end
 
-function optimize(s::simplex_solver, objective::row)
+function optimize(s::SimplexSolver, objective::Row)
     while true
-        entry = symbol()
+        entry = RSymbol()
         for (sy, coeff) in objective.terms
             if !is_dummy(sy) && coeff < 0
                 entry = sy
@@ -237,7 +237,7 @@ function optimize(s::simplex_solver, objective::row)
         if isnothing(exit) # not correct
             error("objective function is unbounded.")
         end
-        tmp = row(s.rows[exit])
+        tmp = Row(s.rows[exit])
         delete!(s.rows, exit)
         solve_for(tmp, exit, entry)
         substitute_out(s, entry, tmp)
@@ -245,19 +245,19 @@ function optimize(s::simplex_solver, objective::row)
     end
 end
 
-function add_with_artificial_variable(s::simplex_solver, r::row)
+function add_with_artificial_variable(s::SimplexSolver, r::Row)
     av = slack()
     s.rows[av] = r
 
     #s.artificial = r
-    s.artificial = row(r)
+    s.artificial = Row(r)
     optimize(s, s.artificial)
     success = near_zero(s.artificial.constant)
-    s.artificial = row()
+    s.artificial = Row()
 
     if haskey(s.rows, av)
         it = s.rows[av]
-        tmp = row(it)
+        tmp = Row(it)
         delete!(s.rows, av)
         if is_constant(tmp)
             return success
@@ -280,7 +280,7 @@ function add_with_artificial_variable(s::simplex_solver, r::row)
     return success
 end
 
-function substitute_out(s::simplex_solver, sy::symbol, r::row)
+function substitute_out(s::SimplexSolver, sy::RSymbol, r::Row)
     for (sym, ri) in s.rows
         substitute_out(ri, sy, r)
         if is_restricted(sym) && ri.constant < 0
@@ -291,7 +291,7 @@ function substitute_out(s::simplex_solver, sy::symbol, r::row)
     substitute_out(s.artificial, sy, r)
 end
 
-function all_dummies(r::row)
+function all_dummies(r::Row)
     all(is_dummy, keys(r.terms))
 end
 
@@ -312,10 +312,10 @@ function choose_subject(expr::expression_result)
             return expr.var2
         end
     end
-    return symbol()
+    return RSymbol()
 end
 
-function get_var_symbol(s::simplex_solver, v::variable)
+function get_var_symbol(s::SimplexSolver, v::Variable)
     if haskey(s.vars, v)
         return s.vars[v]
     end
@@ -323,16 +323,16 @@ function get_var_symbol(s::simplex_solver, v::variable)
     return s.vars[v]
 end
 
-function add(s::simplex_solver, r::row, sym::symbol, coeff::Float64)
+function add(s::SimplexSolver, r::Row, sym::RSymbol, coeff::Float64)
     if haskey(s.rows, sym)
         add!(r, s.rows[sym] * coeff)
     else
         #add!(r, sym * coeff)
-        add!(r, row(sym, coeff)) # hopefully that is meant
+        add!(r, Row(sym, coeff)) # hopefully that is meant
     end
 end
 
-function remove_constraint_(s::simplex_solver, c::constraint)
+function remove_constraint_(s::SimplexSolver, c::Constraint)
     if !haskey(s.constraints, c)
         error("Constraint not found")
     end
@@ -352,7 +352,7 @@ function remove_constraint_(s::simplex_solver, c::constraint)
     else
         leaving = get_marker_leaving_row(s, info.marker)
         if isnothing(leaving)
-            error("Failed to find leaving row")
+            error("Failed to find leaving Row")
         end
         tmp = s.rows[leaving]
         delete!(s.rows, leaving)
@@ -362,12 +362,12 @@ function remove_constraint_(s::simplex_solver, c::constraint)
     optimize(s, s.objective)
 end
 
-function remove_constraint(s::simplex_solver, c::constraint)
+function remove_constraint(s::SimplexSolver, c::Constraint)
     remove_constraint_(s, c)
     autoupdate(s)
 end
 
-function get_marker_leaving_row(s::simplex_solver, marker::symbol)
+function get_marker_leaving_row(s::SimplexSolver, marker::RSymbol)
     dmax = prevfloat(Inf)
     r1 = dmax
     r2 = dmax
@@ -406,7 +406,7 @@ function get_marker_leaving_row(s::simplex_solver, marker::symbol)
     return third < en ? syms[third] : nothing
 end
 
-function set_constant_(s::simplex_solver, c::constraint, constant::Real)
+function set_constant_(s::SimplexSolver, c::Constraint, constant::Real)
     if !haskey(s.constraints, c)
         error("Constraint not found")
     end
@@ -446,20 +446,20 @@ function set_constant_(s::simplex_solver, c::constraint, constant::Real)
     end
 end
 
-function set_constant(s::simplex_solver, c::constraint, constant::Real)
+function set_constant(s::SimplexSolver, c::Constraint, constant::Real)
     set_constant_(s, c, constant)
     dual_optimize(s)
     autoupdate(s)
 end
 
-function dual_optimize(s::simplex_solver)
+function dual_optimize(s::SimplexSolver)
     while !isempty(s.infeasible_rows)
         leaving = pop!(s.infeasible_rows)
         if !haskey(s.rows, leaving) || s.rows[leaving].constant >= 0
             continue
         end
         r = s.rows[leaving]
-        entering = symbol()
+        entering = RSymbol()
         min_ratio = prevfloat(Inf)
         for (sym, coeff) in r.terms
             if coeff > 0 && !is_dummy(sym)
@@ -484,29 +484,29 @@ function dual_optimize(s::simplex_solver)
     end
 end
 
-function add_edit_var(s::simplex_solver, v::variable, str::strength = strong())
+function add_edit_var(s::SimplexSolver, v::Variable, str::strength = strong())
     if has_edit_var(s, v)
-        error("Duplicate edit variable")
+        error("Duplicate edit Variable")
     end
     if is_required(str)
         error("Bad required strength")
     end
-    cn = constraint(linear_expression(v), eq, str)
+    cn = Constraint(LinearExpression(v), eq, str)
     add_constraint(s, cn)
     ev = s.constraints[cn]
     s.edits[v] = edit_info(cn, ev.marker, ev.other, 0)
     return s
 end
 
-function add_edit_vars(s::simplex_solver, vs::Vector{variable{T}}, str::strength = strong()) where {T}
+function add_edit_vars(s::SimplexSolver, vs::Vector{Variable{T}}, str::strength = strong()) where {T}
     for v in vs
         add_edit_var(s, v, str)
     end
 end
 
-function suggest_value_(s::simplex_solver, v::variable, value::Real)
+function suggest_value_(s::SimplexSolver, v::Variable, value::Real)
     if !haskey(s.edits, v)
-        error("Unkown edit variable")
+        error("Unkown edit Variable")
     end
 
     info = s.edits[v]
@@ -537,27 +537,27 @@ function suggest_value_(s::simplex_solver, v::variable, value::Real)
     end
 end
 
-function suggest_value(s::simplex_solver, v::variable, x::Real)
+function suggest_value(s::SimplexSolver, v::Variable, x::Real)
     suggest_value_(s, v, x)
     dual_optimize(s)
     return s
 end
 
-function remove_edit_var(s::simplex_solver, v::variable)
+function remove_edit_var(s::SimplexSolver, v::Variable)
     if !haskey(s.edits, v)
-        error("Unknown edit variable")
+        error("Unknown edit Variable")
     end
     remove_constraint(s, s.edits[v].c)
     delete!(s.edits, v)
 end
 
-function remove_edit_vars(s::simplex_solver, vs::Vector{variable{T}}) where {T}
+function remove_edit_vars(s::SimplexSolver, vs::Vector{Variable{T}}) where {T}
     for v in vs
         remove_edit_var(s, v)
     end
 end
 
-function suggest(s::simplex_solver, v::variable, value::Real)
+function suggest(s::SimplexSolver, v::Variable, value::Real)
     if !has_edit_var(s, v)
         add_edit_var(s, v)
     end
@@ -565,7 +565,7 @@ function suggest(s::simplex_solver, v::variable, value::Real)
     autoupdate(s)
 end
 
-function suggest(s::simplex_solver, sugs::Vector{suggestion})
+function suggest(s::SimplexSolver, sugs::Vector{suggestion})
     for sug in sugs
         if !has_edit_var(s, sug.v)
             add_edit_var(s, sug.v)

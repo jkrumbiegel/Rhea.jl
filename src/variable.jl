@@ -1,24 +1,25 @@
-mutable struct variable{T}
-    p::T
+mutable struct Variable{T}
+    obs::Observable{T}
+    Variable(x) = new{typeof(x)}(Observable(x))
+    Variable(x::T) where {T<:Observable} = new{T.parameters[1]}(x)
 end
 
-Base.show(io::IO, var::variable{T}) where {T<:Number} = print(io, "var($(var.p))")
-Base.show(io::IO, var::variable{Nothing}) = print(io, "NIL")
+Base.show(io::IO, var::Variable) = print(io, "var($(value(var)))")
+Base.show(io::IO, var::Variable{Nothing}) = print(io, "NIL")
 
-nil_var() = variable(nothing)
+nil_var() = Variable(nothing)
 
-const fvariable = variable{Float64}
-fvariable() = variable(0.0)
-variable() = variable(0.0)
-variable(val::Real) = variable{Float64}(val)
-variable(v::variable) = v
+const FVariable = Variable{Float64}
+FVariable() = Variable(0.0)
+FVariable(val::Real) = Variable(Base.convert(Float64, val))
+Variable(v::Variable) = v
 
-value(v::variable) = v.p
-int_value(v::variable)::Int = round(v.p)
-function set_value(v::variable, p)
-    v.p = p
+value(v::Variable) = v.obs[]
+int_value(v::Variable)::Int = round(v.obs[])
+function set_value(v::Variable, val)
+    v.obs[] = val
 end
 
-is_nil(v::variable) = isnothing(v.p)
+is_nil(v::Variable) = isnothing(v.obs[])
 
-is(v::variable, v2::variable) = v === v2
+is(v::Variable, v2::Variable) = v === v2

@@ -1,5 +1,7 @@
 module Rhea
 
+using Observables: Observable
+
 ## include files
 
 include("strength.jl")
@@ -18,7 +20,7 @@ include("constraint.jl")
 
 include("rsymbol.jl")
 
-include("simplex_solver.jl")
+include("simplexsolver.jl")
 
 ## begin exports
 
@@ -26,7 +28,7 @@ include("simplex_solver.jl")
 export strength, is_required, required, strong, weak, medium
 
 # variable
-export variable, fvariable, is_nil, nil_var, value, int_value, set_value, is
+export Variable, FVariable, is_nil, nil_var, value, int_value, set_value, is
 
 # expression
 export Expression, add!, sub!, div!, mult!, substitute_out, coefficient
@@ -38,14 +40,14 @@ export LinearExpression, evaluate
 export Relation, eq, geq, leq, reverse_inequality
 
 # constraint
-export constraint, set_strength, is_required, is_inequality, is_satisfied
+export Constraint, set_strength, is_required, is_inequality, is_satisfied
 
 # rsymbol
 export RSymbol, is_nil, is_external, is_slack, is_pivotable, is_restricted,
     is_unrestricted, dummy, slack, errorsym, external
 
-# simplex_solver
-export simplex_solver, row, add_constraint, add_constraints,
+# simplexsolver
+export SimplexSolver, Row, add_constraint, add_constraints,
     update_external_variables, remove_constraint, set_constant,
     add_edit_var, add_edit_vars, suggest_value, remove_edit_var,
     has_edit_var, suggest
