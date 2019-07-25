@@ -10,7 +10,7 @@ include("approx.jl")
 
 include("expression.jl")
 
-include("linear_expression.jl")
+include("linearexpression.jl")
 
 include("relation.jl")
 
@@ -31,8 +31,8 @@ export variable, fvariable, is_nil, nil_var, value, int_value, set_value, is
 # approx
 export expression, add!, sub!, div!, mult!, substitute_out, coefficient
 
-# linear_expression
-export linear_expression, evaluate
+# linearexpression
+export LinearExpression, evaluate
 
 # relation
 export relation, eq, geq, leq, reverse_inequality
