@@ -16,7 +16,7 @@ include("relation.jl")
 
 include("constraint.jl")
 
-include("symbol.jl")
+include("rsymbol.jl")
 
 include("simplex_solver.jl")
 
@@ -40,8 +40,8 @@ export relation, eq, geq, leq, reverse_inequality
 # constraint
 export constraint, set_strength, is_required, is_inequality, is_satisfied
 
-# symbol
-export symbol, is_nil, is_external, is_slack, is_pivotable, is_restricted,
+# rsymbol
+export RSymbol, is_nil, is_external, is_slack, is_pivotable, is_restricted,
     is_unrestricted, dummy, slack, errorsym, external
 
 # simplex_solver
