@@ -28,8 +28,8 @@ export strength, is_required, required, strong, weak, medium
 # variable
 export variable, fvariable, is_nil, nil_var, value, int_value, set_value, is
 
-# approx
-export expression, add!, sub!, div!, mult!, substitute_out, coefficient
+# expression
+export Expression, add!, sub!, div!, mult!, substitute_out, coefficient
 
 # linearexpression
 export LinearExpression, evaluate
