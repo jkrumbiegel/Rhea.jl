@@ -35,7 +35,7 @@ export expression, add!, sub!, div!, mult!, substitute_out, coefficient
 export LinearExpression, evaluate
 
 # relation
-export relation, eq, geq, leq, reverse_inequality
+export Relation, eq, geq, leq, reverse_inequality
 
 # constraint
 export constraint, set_strength, is_required, is_inequality, is_satisfied
